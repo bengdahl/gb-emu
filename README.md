@@ -1,3 +1,9 @@
+### Notice:
+
+This project must be compiled using rust nightly.
+
+------
+
 # Gameboy Emulator
 
 ## Planned features:
