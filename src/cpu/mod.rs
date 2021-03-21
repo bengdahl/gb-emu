@@ -207,10 +207,42 @@ mod registers {
 
     impl Debug for FRegister {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "{}", if self.contains(FRegister::ZERO) { "Z" } else { "-" })?;
-            write!(f, "{}", if self.contains(FRegister::NEGATIVE) { "N" } else { "-" })?;
-            write!(f, "{}", if self.contains(FRegister::HALFCARRY) { "H" } else { "-" })?;
-            write!(f, "{}", if self.contains(FRegister::CARRY) { "C" } else { "-" })?;
+            write!(
+                f,
+                "{}",
+                if self.contains(FRegister::ZERO) {
+                    "Z"
+                } else {
+                    "-"
+                }
+            )?;
+            write!(
+                f,
+                "{}",
+                if self.contains(FRegister::NEGATIVE) {
+                    "N"
+                } else {
+                    "-"
+                }
+            )?;
+            write!(
+                f,
+                "{}",
+                if self.contains(FRegister::HALFCARRY) {
+                    "H"
+                } else {
+                    "-"
+                }
+            )?;
+            write!(
+                f,
+                "{}",
+                if self.contains(FRegister::CARRY) {
+                    "C"
+                } else {
+                    "-"
+                }
+            )?;
             Ok(())
         }
     }

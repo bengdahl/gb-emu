@@ -2,7 +2,6 @@
 
 use super::decode;
 use super::{CpuInputPins, CpuOutputPins, FRegister};
-use std::cell::RefMut;
 
 impl super::Cpu {
     /// Set the output pins to fetch the memory located at the address in the PC register, and then increment the PC register.
