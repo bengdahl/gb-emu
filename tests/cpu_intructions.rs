@@ -196,7 +196,7 @@ fn add() {
         0x06, 1,    // LD B, 1
         0x80, // ADD A,B
         0x77, // LD (HL), A
-        0x3E, 0x0F, // LD A, F,
+        0x3E, 0x0F, // LD A, $F,
         0x06, 1,    // LD B, 1
         0x80, // ADD A,B
         0x77, // LD (HL), A
@@ -232,7 +232,7 @@ fn adc() {
         0x06, 1,    // LD B, 1
         0x88, // ADC A,B
         0x77, // LD (HL), A
-        0x3E, 0x0F, // LD A, F,
+        0x3E, 0x0F, // LD A, $F,
         0x06, 1,    // LD B, 1
         0x88, // ADC A,B
         0x77, // LD (HL), A
@@ -260,6 +260,50 @@ fn adc() {
             (FRegister::HALFCARRY, 17),
             (FRegister::ZERO | FRegister::CARRY | FRegister::HALFCARRY, 0),
             (FRegister::CARRY | FRegister::HALFCARRY, 1),
+        ]
+    );
+}
+
+#[test]
+fn sub() {
+    let cpu = Cpu::default();
+
+    let code = vec![
+        0x21, 0x55, 0xAA, // LD HL, $AA55
+        0x3E, 17, // LD A, 17
+        0x06, 12,   // LD B, 12
+        0x90, // SUB B
+        0x77, // LD (HL), A
+        0x3E, 0, // LD A, 0
+        0x06, 1,    // LD B, 1
+        0x90, // SUB B
+        0x77, // LD (HL), A
+        0x3E, 0x10, // LD A, $10,
+        0x06, 1,    // LD B, 1
+        0x90, // SUB B
+        0x77, // LD (HL), A
+        0x3E, 5, // LD A, 5,
+        0x06, 5,    // LD B, 5
+        0x90, // SUB B
+        0x77, // LD (HL), A
+    ];
+
+    let tester = InstructionTest::new(cpu, code, 0);
+
+    assert_eq!(
+        tester
+            .run(None)
+            .filter_map(Result::ok)
+            .map(|(cpu, d)| (cpu.registers.get_f(), d))
+            .collect::<Vec<_>>(),
+        vec![
+            (FRegister::NEGATIVE | FRegister::CARRY, 5),
+            (FRegister::NEGATIVE, 0xFF),
+            (FRegister::NEGATIVE | FRegister::CARRY, 15),
+            (
+                FRegister::NEGATIVE | FRegister::ZERO | FRegister::CARRY | FRegister::HALFCARRY,
+                0
+            ),
         ]
     );
 }
