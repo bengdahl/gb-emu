@@ -478,6 +478,23 @@ fn cpu_runner_gen(
                         cpu.store_16_bits(v, dst);
                         continue;
                     }
+                    3 => match opcode.y() {
+                        0 => {
+                            // JP nn
+                            cpu_yield!(cpu.fetch_byte());
+                            let low = pins.data;
+                            cpu_yield!(cpu.fetch_byte());
+                            let high = pins.data;
+
+                            let addr = ((high as u16) << 8) | (low as u16);
+                            cpu.registers.set_pc(addr);
+                            continue;
+                        }
+                        1 => todo!("CB prefix"),
+                        6 => todo!("DI"),
+                        7 => todo!("EI"),
+                        _ => panic!("Unidentified opcode"),
+                    },
                     5 if opcode.q() == 0 => {
                         // PUSH
                         let from = decode::rp2(opcode.p());

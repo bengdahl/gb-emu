@@ -494,3 +494,27 @@ fn inc_dec_16_bit() {
         compare_against
     )
 }
+
+#[test]
+#[rustfmt::skip]
+fn jp() {
+    let code = vec![
+        0x21, 0x55, 0xAA, // LD HL, $AA55
+        0x3E, 0x00, // LD A, $00
+        0xC3, 0x0A, 0x00, // JP .jp1
+        0x3E, 0xFF, // LD A, $FF
+        // .jp1
+        0x77, // LD (HL), A
+    ];
+
+    let tester = InstructionTest::new(Cpu::default(), code, 0);
+
+    assert_eq!(
+        tester
+            .run(None)
+            .filter_map(Result::ok)
+            .map(|(cpu, d)| (cpu.registers.get_f(), d))
+            .collect::<Vec<_>>(),
+        vec![(FRegister::EMPTY, 0)]
+    )
+}
