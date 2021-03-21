@@ -365,6 +365,36 @@ fn cpu_runner_gen(
                         cpu.registers.set_a(pins.data);
                         continue;
                     }
+                    3 if opcode.q() == 0 => {
+                        // 16 bit INC
+                        let dst = decode::rp(opcode.p());
+
+                        let v = cpu.read_16_bits(dst);
+                        let nv = v.wrapping_add(1);
+                        // Pause for a cycle
+                        cpu_yield!(CpuOutputPins {
+                            addr: 0,
+                            data: 0,
+                            is_read: true,
+                        });
+                        cpu.store_16_bits(nv, dst);
+                        continue;
+                    }
+                    3 if opcode.q() == 1 => {
+                        // 16 bit DEC
+                        let dst = decode::rp(opcode.p());
+
+                        let v = cpu.read_16_bits(dst);
+                        let nv = v.wrapping_sub(1);
+                        // Pause for a cycle
+                        cpu_yield!(CpuOutputPins {
+                            addr: 0,
+                            data: 0,
+                            is_read: true,
+                        });
+                        cpu.store_16_bits(nv, dst);
+                        continue;
+                    }
                     4 => {
                         // 8 bit INC
                         let dst = decode::r(opcode.y());

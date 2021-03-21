@@ -440,3 +440,57 @@ fn dec() {
         ]
     );
 }
+
+#[test]
+fn inc_dec_16_bit() {
+    let inc_checks = vec![(0x0123, 0x0124), (0x01FF, 0x0200), (0xFFFF, 0x0000)];
+
+    let dec_checks = vec![(0x0123, 0x0122), (0x0200, 0x01FF), (0x0000, 0xFFFF)];
+
+    let mut code = vec![
+        0x21, 0x55, 0xAA, // LD HL, $AA55
+    ];
+
+    for (i, _) in inc_checks.iter() {
+        let lo = (i & 0xFF) as u8;
+        let hi = (i >> 8) as u8;
+        code.extend_from_slice(&[
+            0x01, lo, hi,   // LD BC, <i>
+            0x03, // INC BC
+            0x71, // LD (HL), C
+            0x70, // LD (HL), B
+        ]);
+    }
+
+    for (i, _) in dec_checks.iter() {
+        let lo = (i & 0xFF) as u8;
+        let hi = (i >> 8) as u8;
+        code.extend_from_slice(&[
+            0x01, lo, hi,   // LD BC, <i>
+            0x0B, // DEC BC
+            0x71, // LD (HL), C
+            0x70, // LD (HL), B
+        ]);
+    }
+
+    let compare_against = [inc_checks, dec_checks]
+        .iter()
+        .flatten()
+        .flat_map(|(_, o)| {
+            let lo = (o & 0xff) as u8;
+            let hi = (o >> 8) as u8;
+            vec![(FRegister::EMPTY, lo), (FRegister::EMPTY, hi)]
+        })
+        .collect::<Vec<(FRegister, u8)>>();
+
+    let tester = InstructionTest::new(Cpu::default(), code, 0);
+
+    assert_eq!(
+        tester
+            .run(None)
+            .filter_map(Result::ok)
+            .map(|(cpu, d)| (cpu.registers.get_f(), d))
+            .collect::<Vec<_>>(),
+        compare_against
+    )
+}
