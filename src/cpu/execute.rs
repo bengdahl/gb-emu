@@ -365,6 +365,42 @@ fn cpu_runner_gen(
                         cpu.registers.set_a(pins.data);
                         continue;
                     }
+                    4 => {
+                        // 8 bit INC
+                        let dst = decode::r(opcode.y());
+
+                        let v = read_8_bits!(cpu, dst);
+                        let nv = v.wrapping_add(1);
+                        let z = nv == 0;
+                        // a half carry can only happen when the lower nybble is 0xF
+                        let hc = (v & 0xf) == 0xf;
+                        cpu.registers.modify_f(|mut f| {
+                            f.set_value(FRegister::ZERO, z);
+                            f.unset(FRegister::NEGATIVE);
+                            f.set_value(FRegister::HALFCARRY, hc);
+                            f
+                        });
+                        store_8_bits!(cpu, nv, dst);
+                        continue;
+                    }
+                    5 => {
+                        // 8 bit DEC
+                        let dst = decode::r(opcode.y());
+
+                        let v = read_8_bits!(cpu, dst);
+                        let nv = v.wrapping_sub(1); // equiv. to wrapping_add(255)
+                        let z = nv == 0;
+                        // a half carry will always happen unless the lower nybble equals 0
+                        let hc = (v & 0xf) != 0x0;
+                        cpu.registers.modify_f(|mut f| {
+                            f.set_value(FRegister::ZERO, z);
+                            f.set(FRegister::NEGATIVE);
+                            f.set_value(FRegister::HALFCARRY, hc);
+                            f
+                        });
+                        store_8_bits!(cpu, nv, dst);
+                        continue;
+                    }
                     6 => {
                         // LD from immediate
                         let dst = decode::r(opcode.y());

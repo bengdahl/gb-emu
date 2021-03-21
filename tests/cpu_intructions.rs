@@ -374,3 +374,69 @@ fn add_hl() {
         compare_against
     )
 }
+
+#[test]
+fn inc() {
+    let code = vec![
+        0x21, 0x55, 0xAA, // LD HL, $AA55
+        0x3E, 0x1E, // LD A, $1E
+        0x3C, // INC A
+        0x77, // LD (HL), A
+        0x3C, // INC A
+        0x77, // LD (HL), A
+        0x3E, 0xFF, // LD A, $FF
+        0x3C, // INC A
+        0x77, // LD (HL), A
+    ];
+
+    let tester = InstructionTest::new(Cpu::default(), code, 0);
+
+    assert_eq!(
+        tester
+            .run(None)
+            .filter_map(Result::ok)
+            .map(|(cpu, d)| (cpu.registers.get_f(), d))
+            .collect::<Vec<_>>(),
+        vec![
+            (FRegister::EMPTY, 0x1F),
+            (FRegister::HALFCARRY, 0x20),
+            (FRegister::ZERO | FRegister::HALFCARRY, 0),
+        ]
+    );
+}
+
+#[test]
+fn dec() {
+    let code = vec![
+        0x21, 0x55, 0xAA, // LD HL, $AA55
+        0x3E, 0x21, // LD A, $21
+        0x3D, // DEC A
+        0x77, // LD (HL), A
+        0x3D, // DEC A
+        0x77, // LD (HL), A
+        0x3E, 0x01, // LD A, $01
+        0x3D, // DEC A
+        0x77, // LD (HL), A
+        0x3D, // DEC A
+        0x77, // LD (HL), A
+    ];
+
+    let tester = InstructionTest::new(Cpu::default(), code, 0);
+
+    assert_eq!(
+        tester
+            .run(None)
+            .filter_map(Result::ok)
+            .map(|(cpu, d)| (cpu.registers.get_f(), d))
+            .collect::<Vec<_>>(),
+        vec![
+            (FRegister::NEGATIVE | FRegister::HALFCARRY, 0x20),
+            (FRegister::NEGATIVE, 0x1F),
+            (
+                FRegister::NEGATIVE | FRegister::ZERO | FRegister::HALFCARRY,
+                0
+            ),
+            (FRegister::NEGATIVE, 0xFF),
+        ]
+    );
+}
