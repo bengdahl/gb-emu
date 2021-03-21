@@ -443,8 +443,40 @@ fn cpu_runner_gen(
                         store_8_bits!(cpu, pins.data, dst);
                         continue;
                     }
-
-                    _ => todo!("x=1 ({:#X?})", opcode),
+                    7 => match opcode.y() {
+                        5 => {
+                            // CPL
+                            cpu.registers.modify_a(|a| !a);
+                            cpu.registers.modify_f(|mut f| {
+                                f.set(FRegister::NEGATIVE);
+                                f.set(FRegister::HALFCARRY);
+                                f
+                            });
+                            continue;
+                        }
+                        6 => {
+                            // SCF
+                            cpu.registers.modify_f(|mut f| {
+                                f.unset(FRegister::NEGATIVE);
+                                f.unset(FRegister::HALFCARRY);
+                                f.set(FRegister::CARRY);
+                                f
+                            });
+                            continue;
+                        }
+                        7 => {
+                            // CCF
+                            cpu.registers.modify_f(|mut f| {
+                                f.unset(FRegister::NEGATIVE);
+                                f.unset(FRegister::HALFCARRY);
+                                f.set_value(FRegister::CARRY, !f.contains(FRegister::CARRY));
+                                f
+                            });
+                            continue;
+                        }
+                        _ => todo!("x=0 z=7 {:#X?}", opcode),
+                    },
+                    _ => unreachable!(),
                 },
                 1 if opcode.z() == 6 && opcode.y() == 6 => todo!("HLT"),
                 1 => {
