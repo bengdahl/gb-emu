@@ -279,13 +279,13 @@ fn cpu_runner_gen(
             // Note: `continue` will immediately jump back to the instruction fetch logic.
             // This is intentional and is part of the fetch/execute overlap optimization done on the real cpu.
             //
-            // FIXME: Unfortunately since rust has no equivalent to python's `yield from`, I cant think of a clean
-            // way to factor this out. This must sadly stay one gigantic function until I can find some workaround.
+            // Macros will be used here to abstract over common operations that may yield. We have to do this because
+            // rust generators have no equivalent to python's `yield from`
             match opcode.x() {
                 0 => match opcode.z() {
                     0 => match opcode.y() {
                         0 => continue, // NOP
-                        _ => todo!("x=0 z=0 {:#X?}", opcode)
+                        _ => todo!("x=0 z=0 {:#X?}", opcode),
                     },
                     1 if opcode.q() == 0 => {
                         // 16-bit LD
@@ -443,7 +443,6 @@ fn cpu_runner_gen(
                         store_8_bits!(cpu, pins.data, dst);
                         continue;
                     }
-
 
                     _ => todo!("x=1 ({:#X?})", opcode),
                 },
