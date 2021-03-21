@@ -307,3 +307,70 @@ fn sub() {
         ]
     );
 }
+
+#[test]
+fn add_hl() {
+    /// Output the opcodes necessary to perform an addition of two u16s and output the result in little endian order
+    fn perform_add(a: u16, b: u16) -> Vec<u8> {
+        let a_lo = (a & 0xff) as u8;
+        let b_lo = (b & 0xff) as u8;
+        let a_hi = (a >> 8) as u8;
+        let b_hi = (b >> 8) as u8;
+
+        vec![
+            0x21, a_lo, a_hi, // LD HL, <a>
+            0x01, b_lo, b_hi, // LD BC, <b>
+            0x09, // ADD HL, BC
+            0x54, // LD D, H
+            0x5D, // LD E, L
+            0x21, 0x55, 0xAA, // LD HL, $AA55
+            0x73, // LD (HL), E
+            0x72, // LD (HL), D
+        ]
+    }
+
+    let cpu = Cpu::default();
+
+    let additions = [
+        (0x0105, 0x010B, 0x0210, FRegister::EMPTY),
+        (0x00FF, 0x0001, 0x0100, FRegister::HALFCARRY),
+        (
+            0xFFFF,
+            0x0001,
+            0x0000,
+            FRegister::HALFCARRY | FRegister::CARRY,
+        ),
+        (0xFF00, 0x0100, 0x0000, FRegister::CARRY),
+        (
+            0xFFFF,
+            0xFFFF,
+            0xFFFE,
+            FRegister::HALFCARRY | FRegister::CARRY,
+        ),
+    ];
+
+    let code = additions
+        .iter()
+        .flat_map(|(a, b, _, _)| perform_add(*a, *b))
+        .collect::<Vec<u8>>();
+
+    let compare_against = additions
+        .iter()
+        .flat_map(|(_, _, r, f)| {
+            let l = (r & 0xff) as u8;
+            let h = (r >> 8) as u8;
+            vec![(*f, l), (*f, h)]
+        })
+        .collect::<Vec<(FRegister, u8)>>();
+
+    let tester = InstructionTest::new(cpu, code, 0);
+
+    assert_eq!(
+        tester
+            .run(None)
+            .filter_map(Result::ok)
+            .map(|(cpu, d)| (cpu.registers.get_f(), d))
+            .collect::<Vec<_>>(),
+        compare_against
+    )
+}

@@ -295,6 +295,34 @@ fn cpu_runner_gen(
                         let v = ((high as u16) << 8) | (low as u16);
                         cpu.store_16_bits(v, dst);
                     }
+                    1 if opcode.q() == 1 => {
+                        // 16-bit ADD
+                        let from = decode::rp(opcode.p());
+
+                        let hl = cpu.registers.get_hl();
+                        let l = cpu.registers.get_l();
+                        let addend = cpu.read_16_bits(from);
+                        let addend_low = (addend & 0xff) as u8;
+
+                        let half_carry = addend_low.overflowing_add(l).1;
+                        let (new_hl, carry) = hl.overflowing_add(addend);
+
+                        // This instruction takes an extra cycle
+                        cpu_yield!(CpuOutputPins {
+                            addr: 0,
+                            data: 0,
+                            is_read: true,
+                        });
+
+                        cpu.registers.modify_f(|mut f| {
+                            f.unset(FRegister::NEGATIVE);
+                            f.set_value(FRegister::HALFCARRY, half_carry);
+                            f.set_value(FRegister::CARRY, carry);
+                            f
+                        });
+                        cpu.registers.set_hl(new_hl);
+                        continue;
+                    }
                     2 if opcode.q() == 0 => {
                         // LD to memory
                         let addr = match opcode.y() {
