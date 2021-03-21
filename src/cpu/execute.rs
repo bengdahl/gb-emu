@@ -2,190 +2,9 @@
 
 use super::decode;
 use super::{CpuInputPins, CpuOutputPins, FRegister};
-use std::convert::TryFrom;
-
-#[macro_use]
-mod macros {
-    /// Store an 8 bit value into a register specified by the `r` table. Yields a cpu cycle on indirect HL write, unyielding otherwise.
-    ///
-    /// See https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html
-    macro_rules! store_8_bits {
-        ($self:ident, $v:expr, $dest:expr) => {
-            match $dest {
-                LoadDest::B => $self.registers.set_b($v),
-                LoadDest::C => $self.registers.set_c($v),
-                LoadDest::D => $self.registers.set_d($v),
-                LoadDest::E => $self.registers.set_e($v),
-                LoadDest::H => $self.registers.set_h($v),
-                LoadDest::L => $self.registers.set_l($v),
-                LoadDest::IndHL => {
-                    yield $self.write_byte($self.registers.get_hl(), $v);
-                }
-                LoadDest::A => $self.registers.set_a($v),
-            }
-        };
-    }
-
-    /// Read an 8 bit value from a register specified by the `r` table. Yields a cpu cycle on indirect HL read, unyielding otherwise.
-    ///
-    /// See https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html
-    macro_rules! read_8_bits {
-        ($self:ident, $dest:expr) => {
-            match $dest {
-                LoadDest::B => $self.registers.get_b(),
-                LoadDest::C => $self.registers.get_c(),
-                LoadDest::D => $self.registers.get_d(),
-                LoadDest::E => $self.registers.get_e(),
-                LoadDest::H => $self.registers.get_h(),
-                LoadDest::L => $self.registers.get_l(),
-                LoadDest::IndHL => (yield $self.read_byte($self.registers.get_hl())).data,
-                LoadDest::A => $self.registers.get_a(),
-            }
-        };
-    }
-}
+use std::cell::RefMut;
 
 impl super::Cpu {
-    pub fn run(
-        &mut self,
-    ) -> impl std::ops::Generator<CpuInputPins, Yield = CpuOutputPins, Return = ()> + '_ {
-        // Every `yield` here will cause the CPU to wait for one memory cycle.
-        #[allow(unused_assignments)]
-        move |mut pins: CpuInputPins| loop {
-            // Fetch
-            pins = yield self.fetch_byte();
-            let opcode = super::decode::Opcode(pins.data);
-
-            // Decode & execute
-            //
-            // Note: `continue` will immediately jump back to the instruction fetch logic.
-            // This is intentional and is part of the fetch/execute overlap optimization done on the real cpu.
-            //
-            // FIXME: Unfortunately since rust has no equivalent to python's `yield from`, I cant think of a clean
-            // way to factor this out. This must sadly stay one gigantic function until I can find some workaround.
-            match opcode.x() {
-                0 => match opcode.z() {
-                    1 if opcode.q() == 1 => {
-                        // 16-bit LD
-                        let dst = decode::rp(opcode.p());
-
-                        pins = yield self.fetch_byte();
-                        let low = pins.data;
-                        pins = yield self.fetch_byte();
-                        let high = pins.data;
-
-                        let v = ((high as u16) << 8) | (low as u16);
-                        self.store_16_bits(v, dst);
-                    }
-                    2 if opcode.q() == 0 => {
-                        // LD to memory
-                        let addr = match opcode.y() {
-                            0 => self.registers.get_bc(),
-                            1 => self.registers.get_de(),
-                            2 => {
-                                let a = self.registers.get_hl();
-                                self.registers.modify_hl(|hl| hl.wrapping_add(1));
-                                a
-                            }
-                            3 => {
-                                let a = self.registers.get_hl();
-                                self.registers.modify_hl(|hl| hl.wrapping_sub(1));
-                                a
-                            }
-                            _ => unreachable!(),
-                        };
-
-                        yield self.write_byte(addr, self.registers.get_a());
-                    }
-                    2 if opcode.q() == 1 => {
-                        // LD from memory
-                        let addr = match opcode.y() {
-                            0 => self.registers.get_bc(),
-                            1 => self.registers.get_de(),
-                            2 => {
-                                let a = self.registers.get_hl();
-                                self.registers.modify_hl(|hl| hl.wrapping_add(1));
-                                a
-                            }
-                            3 => {
-                                let a = self.registers.get_hl();
-                                self.registers.modify_hl(|hl| hl.wrapping_sub(1));
-                                a
-                            }
-                            _ => unreachable!(),
-                        };
-
-                        pins = yield self.read_byte(addr);
-                        self.registers.set_a(pins.data);
-                        continue;
-                    }
-                    6 => {
-                        // LD from immediate
-                        let dst = decode::r(opcode.y());
-
-                        pins = yield self.fetch_byte();
-                        store_8_bits!(self, pins.data, dst);
-                        continue;
-                    }
-
-                    0x00 => continue, // NOP
-
-                    _ => todo!("x=1"),
-                },
-                1 if opcode.z() == 6 && opcode.y() == 6 => todo!("HLT"),
-                1 => {
-                    // 8-bit register-to-register LD
-                    let dst = decode::r(opcode.y());
-                    let from = decode::r(opcode.z());
-
-                    let v = read_8_bits!(self, from);
-                    store_8_bits!(self, v, dst);
-                    continue;
-                }
-                2 => {
-                    let op = decode::alu(opcode.y());
-                    let reg = decode::r(opcode.z());
-
-                    let v = read_8_bits!(self, reg);
-                    self.do_math(v, op);
-                    continue;
-                }
-                3 => match opcode.z() {
-                    1 if opcode.q() == 0 => {
-                        // POP
-                        let dst = decode::rp2(opcode.p());
-
-                        pins = yield self.read_byte(self.registers.get_sp());
-                        let low = pins.data;
-                        self.registers.modify_sp(|sp| sp.wrapping_add(1));
-                        pins = yield self.read_byte(self.registers.get_sp());
-                        let high = pins.data;
-                        self.registers.modify_sp(|sp| sp.wrapping_add(1));
-
-                        let v = ((high as u16) << 8) | (low as u16);
-                        self.store_16_bits(v, dst);
-                        continue;
-                    }
-                    5 if opcode.q() == 0 => {
-                        // PUSH
-                        let from = decode::rp2(opcode.p());
-                        let v = self.read_16_bits(from);
-
-                        self.registers.modify_sp(|sp| sp.wrapping_sub(1));
-                        let high = (v >> 8) as u8;
-                        pins = yield self.write_byte(self.registers.get_sp(), high);
-                        self.registers.modify_sp(|sp| sp.wrapping_add(1));
-                        let low = (v & 0x00ff) as u8;
-                        pins = yield self.write_byte(self.registers.get_sp(), low);
-                        continue;
-                    }
-                    _ => todo!("x=3"),
-                },
-                _ => unreachable!(),
-            }
-        }
-    }
-
     /// Set the output pins to fetch the memory located at the address in the PC register, and then increment the PC register.
     /// The value of the address pins is equal to the PC register *before* being incremented.
     fn fetch_byte(&mut self) -> CpuOutputPins {
@@ -356,6 +175,232 @@ impl super::Cpu {
 
                     f
                 })
+            }
+        }
+    }
+
+    pub fn runner(self) -> CpuRunner {
+        CpuRunner {
+            cpu: self,
+            gen: Box::pin(cpu_runner_gen()),
+        }
+    }
+}
+
+/// Provides a wrapper to use around the generator underneath the CPU execution logic.
+pub struct CpuRunner {
+    pub cpu: super::Cpu,
+    gen: std::pin::Pin<
+        Box<
+            dyn std::ops::Generator<
+                (super::Cpu, CpuInputPins),
+                Yield = (super::Cpu, CpuOutputPins),
+                Return = !,
+            >,
+        >,
+    >,
+}
+
+impl CpuRunner {
+    pub fn clock(&mut self, pins: CpuInputPins) -> CpuOutputPins {
+        use std::ops::GeneratorState;
+        match self.gen.as_mut().resume((self.cpu, pins)) {
+            GeneratorState::Yielded((cpu, pins_out)) => {
+                self.cpu = cpu;
+                pins_out
+            }
+            GeneratorState::Complete(_) => unreachable!(),
+        }
+    }
+}
+
+/// Yields a generator containing state that will run the cpu
+fn cpu_runner_gen(
+) -> impl std::ops::Generator<(super::Cpu, CpuInputPins), Yield = (super::Cpu, CpuOutputPins), Return = !>
+{
+    // Every `yield` here will cause the CPU to wait for one memory cycle.
+    #[allow(unused_assignments)]
+    move |t: (super::Cpu, CpuInputPins)| {
+        let (mut cpu, mut pins) = t;
+        loop {
+            macro_rules! cpu_yield {
+                ($yielded:expr) => {
+                    let _yielded = $yielded;
+                    (cpu, pins) = yield (cpu, _yielded);
+                };
+            }
+
+            /// Store an 8 bit value into a register specified by the `r` table. Yields a cpu cycle on indirect HL write, unyielding otherwise.
+            ///
+            /// See https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html
+            macro_rules! store_8_bits {
+                ($self:ident, $v:expr, $dest:expr) => {
+                    match $dest {
+                        LoadDest::B => $self.registers.set_b($v),
+                        LoadDest::C => $self.registers.set_c($v),
+                        LoadDest::D => $self.registers.set_d($v),
+                        LoadDest::E => $self.registers.set_e($v),
+                        LoadDest::H => $self.registers.set_h($v),
+                        LoadDest::L => $self.registers.set_l($v),
+                        LoadDest::IndHL => {
+                            cpu_yield!($self.write_byte($self.registers.get_hl(), $v));
+                        }
+                        LoadDest::A => $self.registers.set_a($v),
+                    }
+                };
+            }
+
+            /// Read an 8 bit value from a register specified by the `r` table. Yields a cpu cycle on indirect HL read, unyielding otherwise.
+            ///
+            /// See https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html
+            macro_rules! read_8_bits {
+                ($self:ident, $dest:expr) => {
+                    match $dest {
+                        LoadDest::B => $self.registers.get_b(),
+                        LoadDest::C => $self.registers.get_c(),
+                        LoadDest::D => $self.registers.get_d(),
+                        LoadDest::E => $self.registers.get_e(),
+                        LoadDest::H => $self.registers.get_h(),
+                        LoadDest::L => $self.registers.get_l(),
+                        LoadDest::IndHL => {
+                            cpu_yield!($self.read_byte($self.registers.get_hl()));
+                            pins.data
+                        }
+                        LoadDest::A => $self.registers.get_a(),
+                    }
+                };
+            }
+
+            // Fetch
+            cpu_yield!(cpu.fetch_byte());
+            let opcode = super::decode::Opcode(pins.data);
+
+            // Decode & execute
+            //
+            // Note: `continue` will immediately jump back to the instruction fetch logic.
+            // This is intentional and is part of the fetch/execute overlap optimization done on the real cpu.
+            //
+            // FIXME: Unfortunately since rust has no equivalent to python's `yield from`, I cant think of a clean
+            // way to factor this out. This must sadly stay one gigantic function until I can find some workaround.
+            match opcode.x() {
+                0 => match opcode.z() {
+                    1 if opcode.q() == 0 => {
+                        // 16-bit LD
+                        let dst = decode::rp(opcode.p());
+
+                        cpu_yield!(cpu.fetch_byte());
+                        let low = pins.data;
+                        cpu_yield!(cpu.fetch_byte());
+                        let high = pins.data;
+
+                        let v = ((high as u16) << 8) | (low as u16);
+                        cpu.store_16_bits(v, dst);
+                    }
+                    2 if opcode.q() == 0 => {
+                        // LD to memory
+                        let addr = match opcode.y() {
+                            0 => cpu.registers.get_bc(),
+                            1 => cpu.registers.get_de(),
+                            2 => {
+                                let a = cpu.registers.get_hl();
+                                cpu.registers.modify_hl(|hl| hl.wrapping_add(1));
+                                a
+                            }
+                            3 => {
+                                let a = cpu.registers.get_hl();
+                                cpu.registers.modify_hl(|hl| hl.wrapping_sub(1));
+                                a
+                            }
+                            _ => unreachable!(),
+                        };
+
+                        cpu_yield!(cpu.write_byte(addr, cpu.registers.get_a()));
+                    }
+                    2 if opcode.q() == 1 => {
+                        // LD from memory
+                        let addr = match opcode.y() {
+                            0 => cpu.registers.get_bc(),
+                            1 => cpu.registers.get_de(),
+                            2 => {
+                                let a = cpu.registers.get_hl();
+                                cpu.registers.modify_hl(|hl| hl.wrapping_add(1));
+                                a
+                            }
+                            3 => {
+                                let a = cpu.registers.get_hl();
+                                cpu.registers.modify_hl(|hl| hl.wrapping_sub(1));
+                                a
+                            }
+                            _ => unreachable!(),
+                        };
+
+                        cpu_yield!(cpu.read_byte(addr));
+                        cpu.registers.set_a(pins.data);
+                        continue;
+                    }
+                    6 => {
+                        // LD from immediate
+                        let dst = decode::r(opcode.y());
+
+                        cpu_yield!(cpu.fetch_byte());
+                        store_8_bits!(cpu, pins.data, dst);
+                        continue;
+                    }
+
+                    0x00 => continue, // NOP
+
+                    _ => todo!("x=1 ({:#X?})", opcode),
+                },
+                1 if opcode.z() == 6 && opcode.y() == 6 => todo!("HLT"),
+                1 => {
+                    // 8-bit register-to-register LD
+                    let dst = decode::r(opcode.y());
+                    let from = decode::r(opcode.z());
+
+                    let v = read_8_bits!(cpu, from);
+                    store_8_bits!(cpu, v, dst);
+                    continue;
+                }
+                2 => {
+                    let op = decode::alu(opcode.y());
+                    let reg = decode::r(opcode.z());
+
+                    let v = read_8_bits!(cpu, reg);
+                    cpu.do_math(v, op);
+                    continue;
+                }
+                3 => match opcode.z() {
+                    1 if opcode.q() == 0 => {
+                        // POP
+                        let dst = decode::rp2(opcode.p());
+
+                        cpu_yield!(cpu.read_byte(cpu.registers.get_sp()));
+                        let low = pins.data;
+                        cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
+                        cpu_yield!(cpu.read_byte(cpu.registers.get_sp()));
+                        let high = pins.data;
+                        cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
+
+                        let v = ((high as u16) << 8) | (low as u16);
+                        cpu.store_16_bits(v, dst);
+                        continue;
+                    }
+                    5 if opcode.q() == 0 => {
+                        // PUSH
+                        let from = decode::rp2(opcode.p());
+                        let v = cpu.read_16_bits(from);
+
+                        cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
+                        let high = (v >> 8) as u8;
+                        cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), high));
+                        cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
+                        let low = (v & 0x00ff) as u8;
+                        cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), low));
+                        continue;
+                    }
+                    _ => todo!("x=3 ({:#X?})", opcode),
+                },
+                _ => unreachable!(),
             }
         }
     }

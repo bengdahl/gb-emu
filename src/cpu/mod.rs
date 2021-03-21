@@ -1,23 +1,25 @@
 mod decode;
 mod execute;
 
+pub use execute::CpuRunner;
 use registers::{FRegister, Registers};
 
-#[derive(Clone, Copy, Debug)]
+/// Contains the state of a LR35902 CPU.
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Cpu {
-    registers: Registers,
+    pub registers: Registers,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct CpuOutputPins {
-    addr: u16,
-    data: u8,
-    is_read: bool,
+    pub addr: u16,
+    pub data: u8,
+    pub is_read: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct CpuInputPins {
-    data: u8,
+    pub data: u8,
 }
 
 mod registers {
@@ -27,18 +29,18 @@ mod registers {
         ops::{BitAnd, BitOr, BitOrAssign, Not},
     };
 
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
     pub struct Registers {
-        a: u8,
-        f: FRegister,
-        b: u8,
-        c: u8,
-        d: u8,
-        e: u8,
-        h: u8,
-        l: u8,
-        sp: u16,
-        pc: u16,
+        pub a: u8,
+        pub f: FRegister,
+        pub b: u8,
+        pub c: u8,
+        pub d: u8,
+        pub e: u8,
+        pub h: u8,
+        pub l: u8,
+        pub sp: u16,
+        pub pc: u16,
     }
 
     macro_rules! reg_setters_and_getters {

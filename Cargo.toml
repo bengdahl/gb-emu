@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Ben Engdahl <bengdahl341@gmail.com>"]
 edition = "2018"
 
+[lib]
+name = "gb_core"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

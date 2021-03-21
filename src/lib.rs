@@ -1,4 +1,6 @@
 #![feature(generators)]
 #![feature(generator_trait)]
+#![feature(destructuring_assignment)]
+#![feature(never_type)]
 
-mod cpu;
+pub mod cpu;

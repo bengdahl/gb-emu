@@ -7,11 +7,11 @@
 //! as an octal number with three digits (000-377). These digits can be used as indexes into a lookup table to easily
 //! decode an instruction.
 //!
-//!     XXYYYZZZ
-//!       __
-//!       | _
-//!       | |--> Q (Y>>1)
-//!       |----> P (Y&1)
+//!    XXYYYZZZ
+//!      __
+//!      | _
+//!      | |--> Q (Y>>1)
+//!      |----> P (Y&1)
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Opcode(pub u8);
