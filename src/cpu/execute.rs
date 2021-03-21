@@ -283,6 +283,10 @@ fn cpu_runner_gen(
             // way to factor this out. This must sadly stay one gigantic function until I can find some workaround.
             match opcode.x() {
                 0 => match opcode.z() {
+                    0 => match opcode.y() {
+                        0 => continue, // NOP
+                        _ => todo!("x=0 z=0 {:#X?}", opcode)
+                    },
                     1 if opcode.q() == 0 => {
                         // 16-bit LD
                         let dst = decode::rp(opcode.p());
@@ -440,7 +444,6 @@ fn cpu_runner_gen(
                         continue;
                     }
 
-                    0x00 => continue, // NOP
 
                     _ => todo!("x=1 ({:#X?})", opcode),
                 },
