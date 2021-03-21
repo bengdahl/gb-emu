@@ -2,7 +2,7 @@ mod decode;
 mod execute;
 
 pub use execute::CpuRunner;
-use registers::{FRegister, Registers};
+pub use registers::{FRegister, Registers};
 
 /// Contains the state of a LR35902 CPU.
 #[derive(Clone, Copy, Debug, Default)]
@@ -119,6 +119,7 @@ mod registers {
     pub struct FRegister(u8);
 
     impl FRegister {
+        pub const EMPTY: FRegister = FRegister(0);
         pub const ZERO: FRegister = FRegister(0x80);
         pub const NEGATIVE: FRegister = FRegister(0x40);
         pub const HALFCARRY: FRegister = FRegister(0x20);
@@ -127,7 +128,7 @@ mod registers {
         /// Returns true if any flags in the parameter are set in this value, and false otherwise
         #[inline(always)]
         pub fn contains(self, other: FRegister) -> bool {
-            self.0 | other.0 != 0
+            self.0 & other.0 != 0
         }
 
         /// Equivalent to `self = self | other`
@@ -206,7 +207,11 @@ mod registers {
 
     impl Debug for FRegister {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "")
+            write!(f, "{}", if self.contains(FRegister::ZERO) { "Z" } else { "-" })?;
+            write!(f, "{}", if self.contains(FRegister::NEGATIVE) { "N" } else { "-" })?;
+            write!(f, "{}", if self.contains(FRegister::HALFCARRY) { "H" } else { "-" })?;
+            write!(f, "{}", if self.contains(FRegister::CARRY) { "C" } else { "-" })?;
+            Ok(())
         }
     }
 }

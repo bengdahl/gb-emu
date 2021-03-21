@@ -1,11 +1,11 @@
-use gb_core::cpu::{self, Cpu, CpuInputPins, CpuOutputPins, CpuRunner};
+use gb_core::cpu::{Cpu, CpuInputPins, CpuOutputPins, CpuRunner, FRegister, Registers};
 
 pub const RESULT_ADDR: u16 = 0xAA55;
 pub const RESULT_ADDR_LO: u8 = 0x55;
 pub const RESULT_ADDR_HI: u8 = 0xAA;
 
 /// Represents either a write to $AA55, or an unexpected error that caused the test machine to halt.
-pub type InstructionTestResult = Result<u8, InstructionTestError>;
+pub type InstructionTestResult = Result<(Cpu, u8), InstructionTestError>;
 
 pub enum InstructionTestError {
     OutOfRangeAccess,
@@ -104,7 +104,7 @@ impl InstructionTest {
 
                     if self.last_access == RESULT_ADDR {
                         if let Some(d) = self.to_write {
-                            return Some(Ok(d))
+                            return Some(Ok((self.cpu.cpu, d)))
                         }
                     }
                 }
@@ -164,7 +164,81 @@ fn load() {
     let tester = InstructionTest::new(cpu, code, 0);
 
     assert_eq!(
-        tester.run(None).filter_map(Result::ok).collect::<Vec<_>>(),
+        tester.run(None).filter_map(Result::ok).map(|t| t.1).collect::<Vec<_>>(),
         vec![0xA5]
+    );
+}
+
+#[test]
+fn add() {
+    let cpu = Cpu::default();
+
+    let code = vec![
+        0x21, 0x55, 0xAA,   // LD HL, $AA55
+        0x3E, 12,           // LD A, 12
+        0x06, 17,           // LD B, 17
+        0x80,               // ADD A,B
+        0x77,               // LD (HL), A
+        0x3E, 0xFF,         // LD A, $FF
+        0x06, 1,            // LD B, 1
+        0x80,               // ADD A,B
+        0x77,               // LD (HL), A
+        0x3E, 0x0F,         // LD A, F,
+        0x06, 1,            // LD B, 1
+        0x80,               // ADD A,B
+        0x77,               // LD (HL), A
+    ];
+
+    let tester = InstructionTest::new(cpu, code, 0);
+
+    assert_eq!(
+        tester.run(None).filter_map(Result::ok).map(|(cpu,d)| (cpu.registers.get_f(), d)).collect::<Vec<_>>(),
+        vec![
+            (FRegister::EMPTY, 29),
+            (FRegister::ZERO | FRegister::CARRY | FRegister::HALFCARRY, 0),
+            (FRegister::HALFCARRY, 16),
+        ]
+    );
+}
+
+#[test]
+fn adc() {
+    let cpu = Cpu::default();
+
+    let code = vec![
+        0x21, 0x55, 0xAA,   // LD HL, $AA55
+        0x3E, 12,           // LD A, 12
+        0x06, 17,           // LD B, 17
+        0x88,               // ADC A,B
+        0x77,               // LD (HL), A
+        0x3E, 0xFF,         // LD A, $FF
+        0x06, 1,            // LD B, 1
+        0x88,               // ADC A,B
+        0x77,               // LD (HL), A
+        0x3E, 0x0F,         // LD A, F,
+        0x06, 1,            // LD B, 1
+        0x88,               // ADC A,B
+        0x77,               // LD (HL), A
+        0x3E, 0xFF,         // LD A, $FF
+        0x06, 1,            // LD B, 1
+        0x88,               // ADC A,B
+        0x77,               // LD (HL), A
+        0x3E, 1,            // LD A, 1
+        0x06, 0xFF,         // LD B, $FF
+        0x88,               // ADC A,B
+        0x77,               // LD (HL), A
+    ];
+
+    let tester = InstructionTest::new(cpu, code, 0);
+
+    assert_eq!(
+        tester.run(None).filter_map(Result::ok).map(|(cpu,d)| (cpu.registers.get_f(), d)).collect::<Vec<_>>(),
+        vec![
+            (FRegister::EMPTY, 29),
+            (FRegister::ZERO | FRegister::CARRY | FRegister::HALFCARRY, 0),
+            (FRegister::HALFCARRY, 17),
+            (FRegister::ZERO | FRegister::CARRY | FRegister::HALFCARRY, 0),
+            (FRegister::CARRY | FRegister::HALFCARRY, 1),
+        ]
     );
 }
