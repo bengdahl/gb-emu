@@ -1,4 +1,4 @@
-use gb_core::cpu::{Cpu, CpuInputPins, CpuOutputPins, CpuRunner, FRegister, Registers};
+use gb_core::cpu::{Cpu, CpuInputPins, CpuOutputPins, CpuRunner, FRegister};
 
 pub const RESULT_ADDR: u16 = 0xAA55;
 pub const RESULT_ADDR_LO: u8 = 0x55;
@@ -30,10 +30,12 @@ impl InstructionTest {
     /// Run the cpu and return every write to $AA55 (stops after n cycles)
     pub fn run<'a>(
         self,
-        max_cycles: Option<usize>,
+        max_cycles: Option<u64>,
     ) -> impl Iterator<Item = InstructionTestResult> + 'a {
         struct Running {
             error: bool,
+            cycles_elapsed: u64,
+            max_cycles: Option<u64>,
             cpu: CpuRunner,
             memory: Vec<u8>,
             code_offset: u16,
@@ -81,6 +83,11 @@ impl InstructionTest {
                     };
 
                     let out = self.cpu.clock(CpuInputPins { data });
+                    self.cycles_elapsed += 1;
+                    if self.cycles_elapsed >= self.max_cycles.unwrap_or(u64::MAX) {
+                        self.error = true;
+                        return Some(Err(InstructionTestError::MaxCyclesReached));
+                    }
 
                     match out {
                         CpuOutputPins {
@@ -113,6 +120,8 @@ impl InstructionTest {
 
         Running {
             error: false,
+            cycles_elapsed: 0,
+            max_cycles,
             cpu: self.cpu.runner(),
             memory: self.code,
             code_offset: self.code_offset,
@@ -124,7 +133,7 @@ impl InstructionTest {
 
 #[test]
 fn nop() {
-    let mut cpu = Cpu::default();
+    let cpu = Cpu::default();
 
     let mut cpu = cpu.runner();
 
