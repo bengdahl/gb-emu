@@ -587,7 +587,7 @@ fn cpu_runner_gen(
                             cpu_yield!(cpu.write_byte(addr, v));
                             continue;
                         }
-                        5 => {
+                        6 => {
                             // LD A, (C)
                             let addr = 0xFF00 + (cpu.registers.get_c() as u16);
                             cpu_yield!(cpu.read_byte(addr));
@@ -595,7 +595,7 @@ fn cpu_runner_gen(
                             cpu.registers.set_a(v);
                             continue;
                         }
-                        6 => {
+                        5 => {
                             // LD (nn), A
                             cpu_yield!(cpu.fetch_byte());
                             let low = pins.data;
