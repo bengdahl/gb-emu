@@ -294,6 +294,23 @@ fn cpu_runner_gen(
                 0 => match opcode.z() {
                     0 => match opcode.y() {
                         0 => continue, // NOP
+                        1 => {
+                            // LD (nn), SP
+                            cpu_yield!(cpu.fetch_byte());
+                            let low = pins.data;
+                            cpu_yield!(cpu.fetch_byte());
+                            let high = pins.data;
+
+                            let addr = ((high as u16) << 8) | (low as u16);
+
+                            let sp = cpu.registers.get_sp();
+                            let sp_lo = (sp & 0xFF) as u8;
+                            let sp_hi = (sp >> 8) as u8;
+
+                            cpu_yield!(cpu.write_byte(addr, sp_lo));
+                            cpu_yield!(cpu.write_byte(addr + 1, sp_hi));
+                            continue;
+                        }
                         _ => todo!("x=0 z=0 {:#X?}", opcode),
                     },
                     1 if opcode.q() == 0 => {
