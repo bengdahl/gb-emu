@@ -1,3 +1,4 @@
+pub mod assembler;
 mod decode;
 mod execute;
 
