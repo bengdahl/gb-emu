@@ -523,6 +523,49 @@ fn cpu_runner_gen(
                     continue;
                 }
                 3 => match opcode.z() {
+                    0 => match opcode.y() {
+                        4 => {
+                            // LDH (n), A
+                            cpu_yield!(cpu.fetch_byte());
+                            let n = pins.data;
+                            let addr = 0xFF00 + (n as u16);
+                            let v = cpu.registers.get_a();
+                            cpu_yield!(cpu.write_byte(addr, v));
+                            continue;
+                        }
+                        6 => {
+                            // LDH A, (n)
+                            cpu_yield!(cpu.fetch_byte());
+                            let n = pins.data;
+                            let addr = 0xFF00 + (n as u16);
+                            cpu_yield!(cpu.read_byte(addr));
+                            cpu.registers.set_a(pins.data);
+                            continue;
+                        }
+                        7 => {
+                            // LD HL, SP+d
+                            cpu_yield!(cpu.fetch_byte());
+                            let n = pins.data;
+                            let sp = cpu.registers.get_sp();
+                            let (v, carry) = sp.overflowing_add(n as u16);
+                            let halfcarry = (sp & 0xff) + (n as u16) >= 0x100;
+                            // Pause
+                            cpu_yield!(CpuOutputPins {
+                                addr: 0,
+                                data: 0,
+                                is_read: true,
+                            });
+                            cpu.registers.set_sp(v);
+                            cpu.registers.modify_f(|_| {
+                                let mut f = FRegister::EMPTY;
+                                f.set_value(FRegister::CARRY, carry);
+                                f.set_value(FRegister::HALFCARRY, halfcarry);
+                                f
+                            });
+                            continue;
+                        }
+                        _ => todo!("{:#X?}", opcode),
+                    },
                     1 if opcode.q() == 0 => {
                         // POP
                         let dst = decode::rp2(opcode.p());
