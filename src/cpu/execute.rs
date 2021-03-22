@@ -563,7 +563,47 @@ fn cpu_runner_gen(
                                 continue;
                             }
                         }
-                        _ => todo!("x=3 z=2 {:#X?}", opcode),
+                        4 => {
+                            // LD (C), A
+                            let addr = 0xFF00 + (cpu.registers.get_c() as u16);
+                            let v = cpu.registers.get_a();
+                            cpu_yield!(cpu.write_byte(addr, v));
+                            continue;
+                        }
+                        5 => {
+                            // LD A, (C)
+                            let addr = 0xFF00 + (cpu.registers.get_c() as u16);
+                            cpu_yield!(cpu.read_byte(addr));
+                            let v = pins.data;
+                            cpu.registers.set_a(v);
+                            continue;
+                        }
+                        6 => {
+                            // LD (nn), A
+                            cpu_yield!(cpu.fetch_byte());
+                            let low = pins.data;
+                            cpu_yield!(cpu.fetch_byte());
+                            let high = pins.data;
+
+                            let addr = ((high as u16) << 8) | (low as u16);
+                            let v = cpu.registers.get_a();
+                            cpu_yield!(cpu.write_byte(addr, v));
+                            continue;
+                        }
+                        7 => {
+                            // LD A, (nn)
+                            cpu_yield!(cpu.fetch_byte());
+                            let low = pins.data;
+                            cpu_yield!(cpu.fetch_byte());
+                            let high = pins.data;
+
+                            let addr = ((high as u16) << 8) | (low as u16);
+                            cpu_yield!(cpu.read_byte(addr));
+                            let v = pins.data;
+                            cpu.registers.set_a(v);
+                            continue;
+                        }
+                        _ => unreachable!(),
                     },
                     3 => match opcode.y() {
                         0 => {
