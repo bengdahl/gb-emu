@@ -521,6 +521,24 @@ fn cpu_runner_gen(
                         cpu.store_16_bits(v, dst);
                         continue;
                     }
+                    1 if opcode.q() == 1 => match opcode.p() {
+                        2 => {
+                            // JP HL
+                            cpu.registers.set_pc(cpu.registers.get_hl());
+                            continue;
+                        }
+                        3 => {
+                            // LD SP, HL
+                            cpu.registers.set_sp(cpu.registers.get_hl());
+                            cpu_yield!(CpuOutputPins {
+                                addr: 0,
+                                data: 0,
+                                is_read: true
+                            });
+                            continue;
+                        }
+                        _ => todo!("x=3 z=1 q=1 {:#X?}", opcode),
+                    },
                     2 => match opcode.y() {
                         y @ 0..=3 => {
                             // JP c nn
