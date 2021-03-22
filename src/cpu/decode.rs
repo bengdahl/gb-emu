@@ -117,3 +117,21 @@ pub fn rp2(i: u8) -> super::execute::LoadDest16Bit {
         _ => unreachable!(),
     }
 }
+
+/// Represents table "cc" in this document:
+///
+/// https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html
+#[inline]
+pub fn cc(i: u8) -> super::execute::FlagCondition {
+    assert!(i < 4, "value outside of range 0-3");
+    use super::execute::FlagCondition::*;
+    // 0  1	 2  3
+    // NZ Z  NC C
+    match i {
+        0 => NZ,
+        1 => Z,
+        2 => NC,
+        3 => C,
+        _ => unreachable!(),
+    }
+}

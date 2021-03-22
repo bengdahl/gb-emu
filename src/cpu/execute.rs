@@ -178,6 +178,15 @@ impl super::Cpu {
         }
     }
 
+    fn test_condition(&self, c: FlagCondition) -> bool {
+        match c {
+            FlagCondition::NZ => !self.registers.f.contains(FRegister::ZERO),
+            FlagCondition::Z => self.registers.f.contains(FRegister::ZERO),
+            FlagCondition::NC => !self.registers.f.contains(FRegister::CARRY),
+            FlagCondition::C => self.registers.f.contains(FRegister::CARRY),
+        }
+    }
+
     pub fn runner(self) -> CpuRunner {
         CpuRunner {
             cpu: self,
@@ -512,6 +521,32 @@ fn cpu_runner_gen(
                         cpu.store_16_bits(v, dst);
                         continue;
                     }
+                    2 => match opcode.y() {
+                        y @ 0..=3 => {
+                            // JP c nn
+                            let condition = decode::cc(y);
+
+                            cpu_yield!(cpu.fetch_byte());
+                            let low = pins.data;
+                            cpu_yield!(cpu.fetch_byte());
+                            let high = pins.data;
+
+                            let addr = ((high as u16) << 8) | (low as u16);
+
+                            if cpu.test_condition(condition) {
+                                cpu.registers.set_pc(addr);
+                                // Pause for a cycle
+                                cpu_yield!(CpuOutputPins {
+                                    addr: 0,
+                                    data: 0,
+                                    is_read: true,
+                                });
+                            } else {
+                                continue;
+                            }
+                        }
+                        _ => todo!("x=3 z=2 {:#X?}", opcode),
+                    },
                     3 => match opcode.y() {
                         0 => {
                             // JP nn
@@ -540,6 +575,15 @@ fn cpu_runner_gen(
                         cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
                         let low = (v & 0x00ff) as u8;
                         cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), low));
+                        continue;
+                    }
+                    6 => {
+                        let operation = decode::alu(opcode.y());
+
+                        cpu_yield!(cpu.fetch_byte());
+                        let n = pins.data;
+
+                        cpu.do_math(n, operation);
                         continue;
                     }
                     _ => todo!("x=3 ({:#X?})", opcode),
@@ -587,4 +631,11 @@ pub enum LoadDest16Bit {
     DE,
     HL,
     SP,
+}
+
+pub enum FlagCondition {
+    NZ,
+    Z,
+    NC,
+    C,
 }
