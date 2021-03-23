@@ -562,6 +562,34 @@ fn cpu_runner_gen(
                             cpu_yield!(cpu.write_byte(addr, v));
                             continue;
                         }
+                        5 => {
+                            // ADD SP, n
+                            cpu_yield!(cpu.fetch_byte());
+                            let n = pins.data;
+                            let sp = cpu.registers.get_sp();
+                            let (v, carry) = sp.overflowing_add(n as u16);
+                            let halfcarry = (sp & 0xff) + (n as u16) >= 0x100;
+                            // Pause
+                            cpu_yield!(CpuOutputPins {
+                                addr: 0,
+                                data: 0,
+                                is_read: true,
+                            });
+                            cpu.registers.set_sp(v);
+                            cpu.registers.modify_f(|_| {
+                                let mut f = FRegister::EMPTY;
+                                f.set_value(FRegister::CARRY, carry);
+                                f.set_value(FRegister::HALFCARRY, halfcarry);
+                                f
+                            });
+                            // Pause again for some reason
+                            cpu_yield!(CpuOutputPins {
+                                addr: 0,
+                                data: 0,
+                                is_read: true,
+                            });
+                            continue;
+                        }
                         6 => {
                             // LDH A, (n)
                             cpu_yield!(cpu.fetch_byte());
