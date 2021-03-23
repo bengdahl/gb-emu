@@ -584,7 +584,7 @@ fn cpu_runner_gen(
                                 data: 0,
                                 is_read: true,
                             });
-                            cpu.registers.set_sp(v);
+                            cpu.registers.set_hl(v);
                             cpu.registers.modify_f(|_| {
                                 let mut f = FRegister::EMPTY;
                                 f.set_value(FRegister::CARRY, carry);
