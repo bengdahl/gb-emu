@@ -524,6 +524,35 @@ fn cpu_runner_gen(
                 }
                 3 => match opcode.z() {
                     0 => match opcode.y() {
+                        y @ 0..=3 => {
+                            // RET cc
+                            // Pause for a cycle
+                            cpu_yield!(CpuOutputPins {
+                                addr: 0,
+                                data: 0,
+                                is_read: true,
+                            });
+
+                            if cpu.test_condition(decode::cc(y)) {
+                                cpu_yield!(cpu.read_byte(cpu.registers.get_sp()));
+                                let pc_lo = pins.data;
+                                cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
+                                cpu_yield!(cpu.read_byte(cpu.registers.get_sp()));
+                                let pc_hi = pins.data;
+                                cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
+                                let pc = ((pc_hi as u16) << 8) | (pc_lo as u16);
+                                // Pause for a cycle
+                                cpu_yield!(CpuOutputPins {
+                                    addr: 0,
+                                    data: 0,
+                                    is_read: true,
+                                });
+                                cpu.registers.set_pc(pc);
+                                continue;
+                            } else {
+                                continue;
+                            }
+                        }
                         4 => {
                             // LDH (n), A
                             cpu_yield!(cpu.fetch_byte());
@@ -582,6 +611,26 @@ fn cpu_runner_gen(
                         continue;
                     }
                     1 if opcode.q() == 1 => match opcode.p() {
+                        0 => {
+                            // RET
+                            cpu_yield!(cpu.read_byte(cpu.registers.get_sp()));
+                            let pc_lo = pins.data;
+                            cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
+                            cpu_yield!(cpu.read_byte(cpu.registers.get_sp()));
+                            let pc_hi = pins.data;
+                            cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
+
+                            // Pause for a cycle
+                            cpu_yield!(CpuOutputPins {
+                                addr: 0,
+                                data: 0,
+                                is_read: true,
+                            });
+
+                            let pc = ((pc_hi as u16) << 8) | (pc_lo as u16);
+                            cpu.registers.set_pc(pc);
+                            continue;
+                        }
                         2 => {
                             // JP HL
                             cpu.registers.set_pc(cpu.registers.get_hl());
@@ -683,7 +732,7 @@ fn cpu_runner_gen(
                         _ => panic!("Unidentified opcode"),
                     },
                     4 => match opcode.y() {
-                        y@0..=3 => {
+                        y @ 0..=3 => {
                             // CALL cc, nn
                             cpu_yield!(cpu.fetch_byte());
                             let low = pins.data;
@@ -694,8 +743,8 @@ fn cpu_runner_gen(
 
                             if cpu.test_condition(decode::cc(y)) {
                                 let pc = cpu.registers.get_pc();
-                                let pc_lo = (pc&0xFF) as u8;
-                                let pc_hi = (pc>>8) as u8;
+                                let pc_lo = (pc & 0xFF) as u8;
+                                let pc_hi = (pc >> 8) as u8;
 
                                 cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
                                 cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), pc_hi));
@@ -715,8 +764,8 @@ fn cpu_runner_gen(
                                 continue;
                             }
                         }
-                        _ => panic!()
-                    }
+                        _ => panic!(),
+                    },
                     5 if opcode.q() == 0 => {
                         // PUSH
                         let from = decode::rp2(opcode.p());
@@ -740,8 +789,8 @@ fn cpu_runner_gen(
                         let addr = ((high as u16) << 8) | (low as u16);
 
                         let pc = cpu.registers.get_pc();
-                        let pc_lo = (pc&0xFF) as u8;
-                        let pc_hi = (pc>>8) as u8;
+                        let pc_lo = (pc & 0xFF) as u8;
+                        let pc_hi = (pc >> 8) as u8;
 
                         cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
                         cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), pc_hi));
