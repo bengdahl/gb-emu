@@ -796,7 +796,7 @@ fn cpu_runner_gen(
 
                                 cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
                                 cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), pc_hi));
-                                cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
+                                cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
                                 cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), pc_lo));
 
                                 cpu.registers.set_pc(addr);

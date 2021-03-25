@@ -1,4 +1,6 @@
 SECTION "text", ROM0[0]
+    LD HL, Stack
+    LD SP, HL
     LD HL, $AA55
     
     JP Main
@@ -55,3 +57,7 @@ Main:
     LD B, $FF
     CALL NZ, SetZero
     LD [HL], B
+
+StackTop:
+    DS $100 - @
+Stack: 
