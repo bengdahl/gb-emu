@@ -9,6 +9,7 @@ pub use registers::{FRegister, Registers};
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Cpu {
     pub registers: Registers,
+    pub ime: bool,
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -311,7 +311,46 @@ fn cpu_runner_gen(
                             cpu_yield!(cpu.write_byte(addr + 1, sp_hi));
                             continue;
                         }
-                        _ => todo!("x=0 z=0 {:#X?}", opcode),
+                        2 => todo!("STOP"),
+                        3 => {
+                            // JR d
+                            cpu_yield!(cpu.fetch_byte());
+                            let offset = pins.data as i8 as i16;
+                            let pc = cpu.registers.get_pc() as i16;
+                            let new_pc = (pc + offset) as u16;
+                            cpu.registers.set_pc(new_pc);
+
+                            cpu_yield!(CpuOutputPins {
+                                addr: 0,
+                                data: 0,
+                                is_read: true,
+                            });
+
+                            continue;
+                        }
+                        y @ 4..=7 => {
+                            // JR d
+                            let cond = decode::cc(y - 4);
+                            cpu_yield!(cpu.fetch_byte());
+                            let offset = pins.data as i8 as i16;
+
+                            if cpu.test_condition(cond) {
+                                let pc = cpu.registers.get_pc() as i16;
+                                let new_pc = (pc + offset) as u16;
+                                cpu.registers.set_pc(new_pc);
+
+                                cpu_yield!(CpuOutputPins {
+                                    addr: 0,
+                                    data: 0,
+                                    is_read: true,
+                                });
+
+                                continue;
+                            } else {
+                                continue;
+                            }
+                        }
+                        _ => unreachable!(),
                     },
                     1 if opcode.q() == 0 => {
                         // 16-bit LD
@@ -621,7 +660,7 @@ fn cpu_runner_gen(
                             });
                             continue;
                         }
-                        _ => todo!("{:#X?}", opcode),
+                        _ => unreachable!(),
                     },
                     1 if opcode.q() == 0 => {
                         // POP
@@ -657,6 +696,27 @@ fn cpu_runner_gen(
 
                             let pc = ((pc_hi as u16) << 8) | (pc_lo as u16);
                             cpu.registers.set_pc(pc);
+                            continue;
+                        }
+                        1 => {
+                            // RETI
+                            cpu_yield!(cpu.read_byte(cpu.registers.get_sp()));
+                            let pc_lo = pins.data;
+                            cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
+                            cpu_yield!(cpu.read_byte(cpu.registers.get_sp()));
+                            let pc_hi = pins.data;
+                            cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
+
+                            // Pause for a cycle
+                            cpu_yield!(CpuOutputPins {
+                                addr: 0,
+                                data: 0,
+                                is_read: true,
+                            });
+
+                            let pc = ((pc_hi as u16) << 8) | (pc_lo as u16);
+                            cpu.registers.set_pc(pc);
+                            cpu.ime = true;
                             continue;
                         }
                         2 => {
@@ -755,8 +815,16 @@ fn cpu_runner_gen(
                             continue;
                         }
                         1 => todo!("CB prefix"),
-                        6 => todo!("DI"),
-                        7 => todo!("EI"),
+                        6 => {
+                            // DI
+                            cpu.ime = false;
+                            continue;
+                        }
+                        7 => {
+                            // EI
+                            cpu.ime = true;
+                            continue;
+                        }
                         _ => panic!("Unidentified opcode"),
                     },
                     4 => match opcode.y() {
@@ -792,7 +860,8 @@ fn cpu_runner_gen(
                                 continue;
                             }
                         }
-                        _ => panic!(),
+                        4..=7 => panic!(),
+                        _ => unreachable!(),
                     },
                     5 if opcode.q() == 0 => {
                         // PUSH
@@ -807,34 +876,38 @@ fn cpu_runner_gen(
                         cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), low));
                         continue;
                     }
-                    5 if opcode.q() == 1 && opcode.p() == 0 => {
-                        // CALL nn
-                        cpu_yield!(cpu.fetch_byte());
-                        let low = pins.data;
-                        cpu_yield!(cpu.fetch_byte());
-                        let high = pins.data;
+                    5 if opcode.q() == 1 => match opcode.p() {
+                        0 => {
+                            // CALL nn
+                            cpu_yield!(cpu.fetch_byte());
+                            let low = pins.data;
+                            cpu_yield!(cpu.fetch_byte());
+                            let high = pins.data;
 
-                        let addr = ((high as u16) << 8) | (low as u16);
+                            let addr = ((high as u16) << 8) | (low as u16);
 
-                        let pc = cpu.registers.get_pc();
-                        let pc_lo = (pc & 0xFF) as u8;
-                        let pc_hi = (pc >> 8) as u8;
+                            let pc = cpu.registers.get_pc();
+                            let pc_lo = (pc & 0xFF) as u8;
+                            let pc_hi = (pc >> 8) as u8;
 
-                        cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
-                        cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), pc_hi));
-                        cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
-                        cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), pc_lo));
+                            cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
+                            cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), pc_hi));
+                            cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
+                            cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), pc_lo));
 
-                        cpu.registers.set_pc(addr);
-                        // Pause for a cycle
-                        cpu_yield!(CpuOutputPins {
-                            addr: 0,
-                            data: 0,
-                            is_read: true,
-                        });
+                            cpu.registers.set_pc(addr);
+                            // Pause for a cycle
+                            cpu_yield!(CpuOutputPins {
+                                addr: 0,
+                                data: 0,
+                                is_read: true,
+                            });
 
-                        continue;
-                    }
+                            continue;
+                        }
+                        1..=3 => panic!(),
+                        _ => unreachable!(),
+                    },
                     6 => {
                         let operation = decode::alu(opcode.y());
 
