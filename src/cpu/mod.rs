@@ -19,9 +19,14 @@ pub struct CpuOutputPins {
     pub is_read: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct CpuInputPins {
     pub data: u8,
+    pub interrupt_40h: bool,
+    pub interrupt_48h: bool,
+    pub interrupt_50h: bool,
+    pub interrupt_58h: bool,
+    pub interrupt_60h: bool,
 }
 
 mod registers {

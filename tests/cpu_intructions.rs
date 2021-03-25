@@ -82,7 +82,10 @@ impl InstructionTest {
                         },
                     };
 
-                    let out = self.cpu.clock(CpuInputPins { data });
+                    let out = self.cpu.clock(CpuInputPins {
+                        data,
+                        ..Default::default()
+                    });
                     self.cycles_elapsed += 1;
                     if self.cycles_elapsed >= self.max_cycles.unwrap_or(u64::MAX) {
                         self.error = true;
@@ -138,7 +141,10 @@ fn nop() {
     let mut cpu = cpu.runner();
 
     assert!(matches!(
-        cpu.clock(CpuInputPins { data: 0 }),
+        cpu.clock(CpuInputPins {
+            data: 0,
+            ..Default::default()
+        }),
         // Should fetch first instruction
         CpuOutputPins {
             is_read: true,
@@ -149,7 +155,8 @@ fn nop() {
 
     assert!(matches!(
         cpu.clock(CpuInputPins {
-            data: 0x00 // NOP
+            data: 0x00, // NOP
+            ..Default::default()
         }),
         // Recieved NOP, should immediately fetch next instruction due to fetch/execute overlap
         CpuOutputPins {
