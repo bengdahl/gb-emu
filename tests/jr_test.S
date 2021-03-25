@@ -69,11 +69,12 @@ test_page_bound:
 final: 
     LD B, $20
     LD [HL], B
-spin:
-    JR spin
+    JP end
 
 SECTION "page_two", ROM0[$FF]
 jp_page_two:
     LD B, $10
     LD [HL], B
     JR final
+
+end:
