@@ -33,6 +33,14 @@ impl super::Cpu {
         }
     }
 
+    fn nop(&self) -> CpuOutputPins {
+        CpuOutputPins {
+            addr: 0,
+            data: 0,
+            is_read: true,
+        }
+    }
+
     fn store_16_bits(&mut self, v: u16, dest: LoadDest16Bit) {
         match dest {
             LoadDest16Bit::AF => self.registers.set_af(v),
@@ -320,11 +328,7 @@ fn cpu_runner_gen(
                             let new_pc = (pc + offset) as u16;
                             cpu.registers.set_pc(new_pc);
 
-                            cpu_yield!(CpuOutputPins {
-                                addr: 0,
-                                data: 0,
-                                is_read: true,
-                            });
+                            cpu_yield!(cpu.nop());
 
                             continue;
                         }
@@ -339,11 +343,7 @@ fn cpu_runner_gen(
                                 let new_pc = (pc + offset) as u16;
                                 cpu.registers.set_pc(new_pc);
 
-                                cpu_yield!(CpuOutputPins {
-                                    addr: 0,
-                                    data: 0,
-                                    is_read: true,
-                                });
+                                cpu_yield!(cpu.nop());
 
                                 continue;
                             } else {
@@ -377,11 +377,7 @@ fn cpu_runner_gen(
                         let (new_hl, carry) = hl.overflowing_add(addend);
 
                         // This instruction takes an extra cycle
-                        cpu_yield!(CpuOutputPins {
-                            addr: 0,
-                            data: 0,
-                            is_read: true,
-                        });
+                        cpu_yield!(cpu.nop());
 
                         cpu.registers.modify_f(|mut f| {
                             f.unset(FRegister::NEGATIVE);
@@ -441,11 +437,7 @@ fn cpu_runner_gen(
                         let v = cpu.read_16_bits(dst);
                         let nv = v.wrapping_add(1);
                         // Pause for a cycle
-                        cpu_yield!(CpuOutputPins {
-                            addr: 0,
-                            data: 0,
-                            is_read: true,
-                        });
+                        cpu_yield!(cpu.nop());
                         cpu.store_16_bits(nv, dst);
                         continue;
                     }
@@ -456,11 +448,7 @@ fn cpu_runner_gen(
                         let v = cpu.read_16_bits(dst);
                         let nv = v.wrapping_sub(1);
                         // Pause for a cycle
-                        cpu_yield!(CpuOutputPins {
-                            addr: 0,
-                            data: 0,
-                            is_read: true,
-                        });
+                        cpu_yield!(cpu.nop());
                         cpu.store_16_bits(nv, dst);
                         continue;
                     }
@@ -566,11 +554,7 @@ fn cpu_runner_gen(
                         y @ 0..=3 => {
                             // RET cc
                             // Pause for a cycle
-                            cpu_yield!(CpuOutputPins {
-                                addr: 0,
-                                data: 0,
-                                is_read: true,
-                            });
+                            cpu_yield!(cpu.nop());
 
                             if cpu.test_condition(decode::cc(y)) {
                                 cpu_yield!(cpu.read_byte(cpu.registers.get_sp()));
@@ -581,11 +565,7 @@ fn cpu_runner_gen(
                                 cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
                                 let pc = ((pc_hi as u16) << 8) | (pc_lo as u16);
                                 // Pause for a cycle
-                                cpu_yield!(CpuOutputPins {
-                                    addr: 0,
-                                    data: 0,
-                                    is_read: true,
-                                });
+                                cpu_yield!(cpu.nop());
                                 cpu.registers.set_pc(pc);
                                 continue;
                             } else {
@@ -609,11 +589,7 @@ fn cpu_runner_gen(
                             let (v, carry) = sp.overflowing_add(n as u16);
                             let halfcarry = (sp & 0xff) + (n as u16) >= 0x100;
                             // Pause
-                            cpu_yield!(CpuOutputPins {
-                                addr: 0,
-                                data: 0,
-                                is_read: true,
-                            });
+                            cpu_yield!(cpu.nop());
                             cpu.registers.set_sp(v);
                             cpu.registers.modify_f(|_| {
                                 let mut f = FRegister::EMPTY;
@@ -622,11 +598,7 @@ fn cpu_runner_gen(
                                 f
                             });
                             // Pause again for some reason
-                            cpu_yield!(CpuOutputPins {
-                                addr: 0,
-                                data: 0,
-                                is_read: true,
-                            });
+                            cpu_yield!(cpu.nop());
                             continue;
                         }
                         6 => {
@@ -646,11 +618,7 @@ fn cpu_runner_gen(
                             let (v, carry) = sp.overflowing_add(n as u16);
                             let halfcarry = (sp & 0xff) + (n as u16) >= 0x100;
                             // Pause
-                            cpu_yield!(CpuOutputPins {
-                                addr: 0,
-                                data: 0,
-                                is_read: true,
-                            });
+                            cpu_yield!(cpu.nop());
                             cpu.registers.set_hl(v);
                             cpu.registers.modify_f(|_| {
                                 let mut f = FRegister::EMPTY;
@@ -688,11 +656,7 @@ fn cpu_runner_gen(
                             cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
 
                             // Pause for a cycle
-                            cpu_yield!(CpuOutputPins {
-                                addr: 0,
-                                data: 0,
-                                is_read: true,
-                            });
+                            cpu_yield!(cpu.nop());
 
                             let pc = ((pc_hi as u16) << 8) | (pc_lo as u16);
                             cpu.registers.set_pc(pc);
@@ -708,11 +672,7 @@ fn cpu_runner_gen(
                             cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
 
                             // Pause for a cycle
-                            cpu_yield!(CpuOutputPins {
-                                addr: 0,
-                                data: 0,
-                                is_read: true,
-                            });
+                            cpu_yield!(cpu.nop());
 
                             let pc = ((pc_hi as u16) << 8) | (pc_lo as u16);
                             cpu.registers.set_pc(pc);
@@ -727,11 +687,7 @@ fn cpu_runner_gen(
                         3 => {
                             // LD SP, HL
                             cpu.registers.set_sp(cpu.registers.get_hl());
-                            cpu_yield!(CpuOutputPins {
-                                addr: 0,
-                                data: 0,
-                                is_read: true
-                            });
+                            cpu_yield!(cpu.nop());
                             continue;
                         }
                         _ => todo!("x=3 z=1 q=1 {:#X?}", opcode),
@@ -751,11 +707,7 @@ fn cpu_runner_gen(
                             if cpu.test_condition(condition) {
                                 cpu.registers.set_pc(addr);
                                 // Pause for a cycle
-                                cpu_yield!(CpuOutputPins {
-                                    addr: 0,
-                                    data: 0,
-                                    is_read: true,
-                                });
+                                cpu_yield!(cpu.nop());
                             } else {
                                 continue;
                             }
@@ -849,11 +801,7 @@ fn cpu_runner_gen(
 
                                 cpu.registers.set_pc(addr);
                                 // Pause for a cycle
-                                cpu_yield!(CpuOutputPins {
-                                    addr: 0,
-                                    data: 0,
-                                    is_read: true,
-                                });
+                                cpu_yield!(cpu.nop());
 
                                 continue;
                             } else {
@@ -897,11 +845,7 @@ fn cpu_runner_gen(
 
                             cpu.registers.set_pc(addr);
                             // Pause for a cycle
-                            cpu_yield!(CpuOutputPins {
-                                addr: 0,
-                                data: 0,
-                                is_read: true,
-                            });
+                            cpu_yield!(cpu.nop());
 
                             continue;
                         }
