@@ -840,7 +840,7 @@ fn cpu_runner_gen(
 
                             cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
                             cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), pc_hi));
-                            cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
+                            cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
                             cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), pc_lo));
 
                             cpu.registers.set_pc(addr);
@@ -859,6 +859,25 @@ fn cpu_runner_gen(
                         let n = pins.data;
 
                         cpu.do_math(n, operation);
+                        continue;
+                    }
+                    7 => {
+                        // RST
+                        let vector = opcode.y() * 8;
+                        let addr = vector as u16;
+
+                        let pc = cpu.registers.get_pc();
+                        let pc_lo = (pc & 0xFF) as u8;
+                        let pc_hi = (pc >> 8) as u8;
+
+                        cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
+                        cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), pc_hi));
+                        cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
+                        cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), pc_lo));
+
+                        cpu.registers.set_pc(addr);
+                        // Pause for a cycle
+                        cpu_yield!(cpu.nop());
                         continue;
                     }
                     _ => todo!("x=3 ({:#X?})", opcode),
