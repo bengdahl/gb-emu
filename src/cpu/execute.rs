@@ -659,6 +659,27 @@ fn cpu_runner_gen(
                         continue;
                     }
                     7 => match opcode.y() {
+                        0 => {
+                            // RLCA
+                            cpu.modify_a(|a| cpu.do_rotate_shift(a, RotateShiftOperation::RLC));
+                            cpu.modify_f(|mut f| { f.unset(f); f});
+                        },
+                        1 => {
+                            // RRCA
+                            cpu.modify_a(|a| cpu.do_rotate_shift(a, RotateShiftOperation::RRC));
+                            cpu.modify_f(|mut f| { f.unset(f); f});
+                        },
+                        2 => {
+                            // RLA
+                            cpu.modify_a(|a| cpu.do_rotate_shift(a, RotateShiftOperation::RL));
+                            cpu.modify_f(|mut f| { f.unset(f); f});
+                        },
+                        3 => {
+                            // RRA
+                            cpu.modify_a(|a| cpu.do_rotate_shift(a, RotateShiftOperation::RR));
+                            cpu.modify_f(|mut f| { f.unset(f); f});
+                        },
+                        4 => todo!("DAA"),
                         5 => {
                             // CPL
                             cpu.registers.modify_a(|a| !a);
