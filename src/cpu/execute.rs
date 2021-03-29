@@ -216,7 +216,7 @@ impl super::Cpu {
                 nv
             }
             RL => {
-                let rotate_in = if cpu.registers.get_f().contains(FRegister::CARRY) {
+                let rotate_in = if self.registers.get_f().contains(FRegister::CARRY) {
                     1
                 } else {
                     0
@@ -234,7 +234,7 @@ impl super::Cpu {
                 nv
             }
             RR => {
-                let rotate_in = if cpu.registers.get_f().contains(FRegister::CARRY) {
+                let rotate_in = if self.registers.get_f().contains(FRegister::CARRY) {
                     0x80
                 } else {
                     0x00
@@ -282,7 +282,7 @@ impl super::Cpu {
                 let hi = (v & 0xF0) >> 4;
 
                 let nv = (lo << 4) | hi;
-
+                let z = nv == 0;
                 self.registers.modify_f(|mut f| {
                     f.set_value(FRegister::ZERO, z);
                     f.unset(FRegister::NEGATIVE);
@@ -661,32 +661,40 @@ fn cpu_runner_gen(
                     7 => match opcode.y() {
                         0 => {
                             // RLCA
-                            cpu.modify_a(|a| cpu.do_rotate_shift(a, RotateShiftOperation::RLC));
-                            cpu.modify_f(|mut f| {
+                            let a = cpu.registers.get_a();
+                            let na = cpu.do_rotate_shift(a, RotateShiftOperation::RLC);
+                            cpu.registers.set_a(na);
+                            cpu.registers.modify_f(|mut f| {
                                 f.unset(f);
                                 f
                             });
                         }
                         1 => {
                             // RRCA
-                            cpu.modify_a(|a| cpu.do_rotate_shift(a, RotateShiftOperation::RRC));
-                            cpu.modify_f(|mut f| {
+                            let a = cpu.registers.get_a();
+                            let na = cpu.do_rotate_shift(a, RotateShiftOperation::RRC);
+                            cpu.registers.set_a(na);
+                            cpu.registers.modify_f(|mut f| {
                                 f.unset(f);
                                 f
                             });
                         }
                         2 => {
                             // RLA
-                            cpu.modify_a(|a| cpu.do_rotate_shift(a, RotateShiftOperation::RL));
-                            cpu.modify_f(|mut f| {
+                            let a = cpu.registers.get_a();
+                            let na = cpu.do_rotate_shift(a, RotateShiftOperation::RL);
+                            cpu.registers.set_a(na);
+                            cpu.registers.modify_f(|mut f| {
                                 f.unset(f);
                                 f
                             });
                         }
                         3 => {
                             // RRA
-                            cpu.modify_a(|a| cpu.do_rotate_shift(a, RotateShiftOperation::RR));
-                            cpu.modify_f(|mut f| {
+                            let a = cpu.registers.get_a();
+                            let na = cpu.do_rotate_shift(a, RotateShiftOperation::RR);
+                            cpu.registers.set_a(na);
+                            cpu.registers.modify_f(|mut f| {
                                 f.unset(f);
                                 f
                             });
