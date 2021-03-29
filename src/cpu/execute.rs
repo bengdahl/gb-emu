@@ -738,7 +738,7 @@ fn cpu_runner_gen(
                             });
                             continue;
                         }
-                        _ => todo!("x=0 z=7 {:#X?}", opcode),
+                        _ => unreachable!(),
                     },
                     _ => unreachable!(),
                 },
@@ -901,7 +901,7 @@ fn cpu_runner_gen(
                             cpu_yield!(cpu.nop());
                             continue;
                         }
-                        _ => todo!("x=3 z=1 q=1 {:#X?}", opcode),
+                        _ => unreachable!(),
                     },
                     2 => match opcode.y() {
                         y @ 0..=3 => {
@@ -1128,7 +1128,7 @@ fn cpu_runner_gen(
                         cpu_yield!(cpu.nop());
                         continue;
                     }
-                    _ => todo!("x=3 ({:#X?})", opcode),
+                    _ => unreachable!(),
                 },
                 _ => unreachable!(),
             }
