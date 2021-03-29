@@ -135,3 +135,23 @@ pub fn cc(i: u8) -> super::execute::FlagCondition {
         _ => unreachable!(),
     }
 }
+
+/// Represents table "rot" in this document:
+///
+/// https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html
+#[inline]
+pub fn rot(i: u8) -> super::execute::RotateShiftOperation {
+    assert!(i < 8, "value outside of octal range 0-7");
+    use super::execute::RotateShiftOperation::*;
+    match i {
+        0 => RLC,
+        1 => RRC,
+        2 => RL,
+        3 => RR,
+        4 => SLA,
+        5 => SRA,
+        6 => SWAP,
+        7 => SRL,
+        _ => unreachable!(),
+    }
+}

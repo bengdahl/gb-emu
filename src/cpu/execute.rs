@@ -186,6 +186,127 @@ impl super::Cpu {
         }
     }
 
+    fn do_rotate_shift(&mut self, v: u8, op: RotateShiftOperation) -> u8 {
+        use RotateShiftOperation::*;
+        match op {
+            RLC => {
+                let c = v & 0x80 != 0;
+                let nv = v.rotate_left(1);
+                let z = nv == 0;
+                self.registers.modify_f(|mut f| {
+                    f.set_value(FRegister::ZERO, z);
+                    f.unset(FRegister::NEGATIVE);
+                    f.unset(FRegister::HALFCARRY);
+                    f.set_value(FRegister::CARRY, c);
+                    f
+                });
+                nv
+            }
+            RRC => {
+                let c = v & 0x01 != 0;
+                let nv = v.rotate_right(1);
+                let z = nv == 0;
+                self.registers.modify_f(|mut f| {
+                    f.set_value(FRegister::ZERO, z);
+                    f.unset(FRegister::NEGATIVE);
+                    f.unset(FRegister::HALFCARRY);
+                    f.set_value(FRegister::CARRY, c);
+                    f
+                });
+                nv
+            }
+            RL => {
+                let rotate_in = if cpu.registers.get_f().contains(FRegister::CARRY) {
+                    1
+                } else {
+                    0
+                };
+                let (nv, c) = v.overflowing_shl(1);
+                let nv = nv | rotate_in;
+                let z = nv == 0;
+                self.registers.modify_f(|mut f| {
+                    f.set_value(FRegister::ZERO, z);
+                    f.unset(FRegister::NEGATIVE);
+                    f.unset(FRegister::HALFCARRY);
+                    f.set_value(FRegister::CARRY, c);
+                    f
+                });
+                nv
+            }
+            RR => {
+                let rotate_in = if cpu.registers.get_f().contains(FRegister::CARRY) {
+                    0x80
+                } else {
+                    0x00
+                };
+                let (nv, c) = v.overflowing_shr(1);
+                let nv = nv | rotate_in;
+                let z = nv == 0;
+                self.registers.modify_f(|mut f| {
+                    f.set_value(FRegister::ZERO, z);
+                    f.unset(FRegister::NEGATIVE);
+                    f.unset(FRegister::HALFCARRY);
+                    f.set_value(FRegister::CARRY, c);
+                    f
+                });
+                nv
+            }
+            SLA => {
+                let (nv, c) = v.overflowing_shl(1);
+                let z = nv == 0;
+                self.registers.modify_f(|mut f| {
+                    f.set_value(FRegister::ZERO, z);
+                    f.unset(FRegister::NEGATIVE);
+                    f.unset(FRegister::HALFCARRY);
+                    f.set_value(FRegister::CARRY, c);
+                    f
+                });
+                nv
+            }
+            SRA => {
+                let msb = v & 0x80;
+                let (nv, c) = v.overflowing_shr(1);
+                let nv = nv | msb;
+                let z = nv == 0;
+                self.registers.modify_f(|mut f| {
+                    f.set_value(FRegister::ZERO, z);
+                    f.unset(FRegister::NEGATIVE);
+                    f.unset(FRegister::HALFCARRY);
+                    f.set_value(FRegister::CARRY, c);
+                    f
+                });
+                nv
+            }
+            SWAP => {
+                let lo = v & 0x0F;
+                let hi = (v & 0xF0) >> 4;
+
+                let nv = (lo << 4) | hi;
+
+                self.registers.modify_f(|mut f| {
+                    f.set_value(FRegister::ZERO, z);
+                    f.unset(FRegister::NEGATIVE);
+                    f.unset(FRegister::HALFCARRY);
+                    f.unset(FRegister::CARRY);
+                    f
+                });
+                nv
+            }
+            SRL => {
+                let (nv, c) = v.overflowing_shr(1);
+                let z = nv == 0;
+                self.registers.modify_f(|mut f| {
+                    f.set_value(FRegister::ZERO, z);
+                    f.unset(FRegister::NEGATIVE);
+                    f.unset(FRegister::HALFCARRY);
+                    f.set_value(FRegister::CARRY, c);
+                    f
+                });
+                nv
+            }
+        }
+    }
+
     fn test_condition(&self, c: FlagCondition) -> bool {
         match c {
             FlagCondition::NZ => !self.registers.f.contains(FRegister::ZERO),
@@ -807,7 +928,44 @@ fn cpu_runner_gen(
                             cpu.registers.set_pc(addr);
                             continue;
                         }
-                        1 => todo!("CB prefix"),
+                        1 => {
+                            // CB Prefix
+
+                            cpu_yield!(cpu.fetch_byte());
+                            let opcode = decode::Opcode(pins.data);
+
+                            let dest = decode::r(opcode.z());
+                            let v = read_8_bits!(cpu, dest);
+
+                            let nv = match opcode.x() {
+                                0 => cpu.do_rotate_shift(v, decode::rot(opcode.y())),
+                                1 => {
+                                    // BIT
+                                    let n = opcode.y();
+                                    let z = v & (1 << n) != 0;
+                                    cpu.registers.modify_f(|mut f| {
+                                        f.set_value(FRegister::ZERO, z);
+                                        f.unset(FRegister::NEGATIVE);
+                                        f.set(FRegister::HALFCARRY);
+                                        f
+                                    });
+                                    v
+                                }
+                                2 => {
+                                    // RES
+                                    let n = opcode.y();
+                                    v & !(1 << n)
+                                }
+                                3 => {
+                                    // SET
+                                    let n = opcode.y();
+                                    v | (1 << n)
+                                }
+                                _ => unreachable!(),
+                            };
+
+                            store_8_bits!(cpu, nv, dest);
+                        }
                         6 => {
                             // DI
                             cpu.ime = false;
@@ -973,4 +1131,15 @@ pub enum FlagCondition {
     Z,
     NC,
     C,
+}
+
+pub enum RotateShiftOperation {
+    RLC,
+    RRC,
+    RL,
+    RR,
+    SLA,
+    SRA,
+    SWAP,
+    SRL,
 }
