@@ -287,6 +287,47 @@ fn cpu_runner_gen(
                 };
             }
 
+            // Handle interrupts
+            if cpu.ime {
+                let interrupt = if pins.interrupt_40h {
+                    Some(0x40)
+                } else if pins.interrupt_48h {
+                    Some(0x48)
+                } else if pins.interrupt_50h {
+                    Some(0x50)
+                } else if pins.interrupt_58h {
+                    Some(0x58)
+                } else if pins.interrupt_60h {
+                    Some(0x60)
+                } else {
+                    None
+                };
+
+                if let Some(vector) = interrupt {
+                    // Interrupt Service Routine
+
+                    // Two waits for some reason
+                    cpu_yield!(cpu.nop());
+                    cpu_yield!(cpu.nop());
+
+                    let pc = cpu.registers.get_pc();
+                    let pc_lo = (pc & 0xFF) as u8;
+                    let pc_hi = (pc >> 8) as u8;
+
+                    cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
+                    cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), pc_hi));
+                    cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
+                    cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), pc_lo));
+
+                    cpu.registers.set_pc(vector);
+
+                    cpu.ime = false;
+
+                    // One more for good measure
+                    cpu_yield!(cpu.nop());
+                }
+            }
+
             // Fetch
             cpu_yield!(cpu.fetch_byte());
             let opcode = super::decode::Opcode(pins.data);
