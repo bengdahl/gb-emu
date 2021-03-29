@@ -679,7 +679,35 @@ fn cpu_runner_gen(
                             cpu.modify_a(|a| cpu.do_rotate_shift(a, RotateShiftOperation::RR));
                             cpu.modify_f(|mut f| { f.unset(f); f});
                         },
-                        4 => todo!("DAA"),
+                        4 => {
+                            // DAA
+                            let mut f = cpu.registers.get_f();
+                            let mut a = cpu.registers.get_a();
+
+                            if !f.contains(FRegister::NEGATIVE) {
+                                if f.contains(FRegister::CARRY) || a>0x99 {
+                                    a = a.wrapping_add(0x60);
+                                    f.set(FRegister::CARRY);
+                                }
+                                if f.contains(FRegister::HALFCARRY) || (a&0x0F)>0x09 {
+                                    a = a.wrapping_add(0x06);
+                                }
+                            } else {
+                                if f.contains(FRegister::CARRY) {
+                                    a = a.wrapping_sub(0x60);
+                                }
+                                if f.contains(FRegister::HALFCARRY) {
+                                    a = a.wrapping_sub(0x06);
+                                }
+                            }
+
+                            f.set_value(FRegister::ZERO, a==0);
+                            f.unset(FRegister::HALFCARRY);
+
+                            cpu.registers.set_f(f);
+                            cpu.registers.set_a(a);
+                            continue;
+                        },
                         5 => {
                             // CPL
                             cpu.registers.modify_a(|a| !a);
