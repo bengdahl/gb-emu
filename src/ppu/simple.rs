@@ -1,8 +1,6 @@
-//! A simple, but inaccurate implementation of the Gameboy monochrome PPU
+//! An implementation of the Gameboy monochrome PPU
 
-use super::PpuOutputPins;
-
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct PpuSimpleState {
     tile_data: [u8; 0x9800 - 0x8000],
 
@@ -22,18 +20,17 @@ pub struct PpuSimpleState {
     bgp: u8,
     obp0: u8,
     obp1: u8,
+
+    vblank_irq: bool,
+    stat_irq: bool,
+
+    frame: super::Frame,
 }
 
 pub struct PpuSimple {
     pub state: PpuSimpleState,
     gen: std::pin::Pin<
-        Box<
-            dyn std::ops::Generator<
-                (PpuSimpleState, super::PpuInputPins),
-                Yield = (PpuSimpleState, super::PpuOutputPins),
-                Return = !,
-            >,
-        >,
+        Box<dyn std::ops::Generator<PpuSimpleState, Yield = PpuSimpleState, Return = !>>,
     >,
 }
 
@@ -58,6 +55,15 @@ impl PpuSimple {
             bgp: 0u8,
             obp0: 0u8,
             obp1: 0u8,
+
+            vblank_irq: false,
+            stat_irq: false,
+
+            frame: super::Frame {
+                pixels: vec![0; 144 * 160],
+                width: 160,
+                height: 144,
+            },
         };
 
         PpuSimple {
@@ -67,15 +73,81 @@ impl PpuSimple {
     }
 }
 
-fn ppu_gen() -> impl std::ops::Generator<
-    (PpuSimpleState, super::PpuInputPins),
-    Yield = (PpuSimpleState, super::PpuOutputPins),
-    Return = !,
-> {
-    |t| {
-        let (ppu, _) = t;
-        loop {
-            yield (ppu, Default::default());
+impl PpuSimpleState {
+    fn set_ly(&mut self, ly: u8) {
+        assert!(ly <= 153);
+        self.ly = ly;
+        if self.ly == self.lyc {
+            self.stat |= 0x04;
+        } else {
+            self.stat &= !0x04;
         }
+
+        self.update_stat_interrupt();
+    }
+
+    fn set_mode(&mut self, mode: u8) {
+        assert!(mode <= 3);
+        self.stat &= 0xFC;
+        self.stat |= mode;
+
+        self.update_stat_interrupt();
+    }
+
+    fn update_stat_interrupt(&mut self) {
+        let mode = self.stat & 0x03;
+
+        let mode_int = match mode {
+            0 if self.stat & 0x08 != 0 => true,
+            1 if self.stat & 0x10 != 0 => true,
+            2 if self.stat & 0x20 != 0 => true,
+            _ => false,
+        };
+
+        let lyc_int = self.stat & 0x04 != 0 && self.stat & 0x40 != 0;
+
+        self.stat_irq = mode_int | lyc_int;
+    }
+}
+
+fn ppu_gen() -> impl std::ops::Generator<PpuSimpleState, Yield = PpuSimpleState, Return = !> {
+    |mut ppu: PpuSimpleState| loop {
+        // Drawing lines
+        for line in 0..144 {
+            ppu.set_ly(line);
+
+            let mut dot = 0;
+            // OAM Search (mode 2)
+            ppu.set_mode(2);
+            for _ in 0..80 {
+                dot += 1;
+                ppu = yield ppu;
+            }
+
+            // Drawing (mode 3)
+            ppu.set_mode(3);
+            // TODO: this loop has variable duration
+            for _ in 0..168 {
+                dot += 1;
+                ppu = yield ppu;
+            }
+
+            // HBlank (mode 0)
+            while dot < 456 {
+                dot += 1;
+                ppu = yield ppu;
+            }
+        }
+
+        // VBlank (mode 1)
+        ppu.set_mode(1);
+        ppu.vblank_irq = true;
+        for line in 144..154 {
+            ppu.set_ly(line);
+            for _dot in 0..456 {
+                ppu = yield ppu;
+            }
+        }
+        ppu.vblank_irq = false;
     }
 }
