@@ -339,6 +339,7 @@ pub struct CpuRunner {
 }
 
 impl CpuRunner {
+    /// Clock the CPU by exactly one M-cycle
     pub fn clock(&mut self, pins: CpuInputPins) -> CpuOutputPins {
         use std::ops::GeneratorState;
         match self.gen.as_mut().resume((self.cpu, pins)) {
