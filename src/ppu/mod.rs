@@ -16,6 +16,8 @@ pub struct PpuInputPins {
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct PpuOutputPins {
+    data: u8,
+
     vblank_interrupt: bool,
     stat_interrupt: bool,
 }

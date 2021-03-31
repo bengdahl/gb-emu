@@ -1,5 +1,8 @@
 //! An implementation of the Gameboy monochrome PPU
 
+use super::{Frame, PpuInputPins, PpuOutputPins};
+use std::{ops::GeneratorState, rc::Rc};
+
 #[derive(Clone)]
 pub struct PpuSimpleState {
     tile_data: [u8; 0x9800 - 0x8000],
@@ -24,7 +27,7 @@ pub struct PpuSimpleState {
     vblank_irq: bool,
     stat_irq: bool,
 
-    frame: super::Frame,
+    frame: Rc<super::Frame>,
 }
 
 pub struct PpuSimple {
@@ -59,11 +62,11 @@ impl PpuSimple {
             vblank_irq: false,
             stat_irq: false,
 
-            frame: super::Frame {
+            frame: Rc::new(super::Frame {
                 pixels: vec![0; 144 * 160],
                 width: 160,
                 height: 144,
-            },
+            }),
         };
 
         PpuSimple {
@@ -112,6 +115,12 @@ impl PpuSimpleState {
 
 fn ppu_gen() -> impl std::ops::Generator<PpuSimpleState, Yield = PpuSimpleState, Return = !> {
     |mut ppu: PpuSimpleState| loop {
+        let mut frame = Frame {
+            pixels: vec![0; 144 * 160],
+            width: 160,
+            height: 144,
+        };
+
         // Drawing lines
         for line in 0..144 {
             ppu.set_ly(line);
@@ -139,6 +148,8 @@ fn ppu_gen() -> impl std::ops::Generator<PpuSimpleState, Yield = PpuSimpleState,
             }
         }
 
+        ppu.frame = Rc::new(frame);
+
         // VBlank (mode 1)
         ppu.set_mode(1);
         ppu.vblank_irq = true;
@@ -149,5 +160,76 @@ fn ppu_gen() -> impl std::ops::Generator<PpuSimpleState, Yield = PpuSimpleState,
             }
         }
         ppu.vblank_irq = false;
+    }
+}
+
+impl super::PPU for PpuSimple {
+    fn clock(&mut self, input: PpuInputPins) -> PpuOutputPins {
+        let data = if input.is_write {
+            let v = input.data;
+            match input.addr {
+                0x8000..=0x97FF => self.state.tile_data[input.addr as usize - 0x8000] = v,
+                0x9800..=0x9BFF => self.state.bg_map_1[input.addr as usize - 0x9800] = v,
+                0x9C00..=0x9FFF => self.state.bg_map_1[input.addr as usize - 0x9C00] = v,
+
+                0xFE00..=0xFE9F => self.state.oam[input.addr as usize - 0xFE00] = v,
+
+                0xFF40 => self.state.lcdc = v,
+                0xFF41 => {
+                    self.state.stat = (v & 0xFC) | 0x80;
+                    self.state.update_stat_interrupt();
+                }
+                0xFF42 => self.state.scy = v,
+                0xFF43 => self.state.scx = v,
+                0xFF44 => self.state.ly = v,
+                0xFF45 => self.state.lyc = v,
+                // 0xFF46 => DMA,
+                0xFF47 => self.state.bgp = v,
+                0xFF48 => self.state.obp0 = v,
+                0xFF49 => self.state.obp1 = v,
+                0xFF4A => self.state.wy = v,
+                0xFF4B => self.state.wx = v,
+                _ => (),
+            }
+            0
+        } else {
+            match input.addr {
+                0x8000..=0x97FF => self.state.tile_data[input.addr as usize - 0x8000],
+                0x9800..=0x9BFF => self.state.bg_map_1[input.addr as usize - 0x9800],
+                0x9C00..=0x9FFF => self.state.bg_map_1[input.addr as usize - 0x9C00],
+
+                0xFE00..=0xFE9F => self.state.oam[input.addr as usize - 0xFE00],
+
+                0xFF40 => self.state.lcdc,
+                0xFF41 => self.state.stat | 0x80,
+                0xFF42 => self.state.scy,
+                0xFF43 => self.state.scx,
+                0xFF44 => self.state.ly,
+                0xFF45 => self.state.lyc,
+                // 0xFF46 => DMA,
+                0xFF47 => self.state.bgp,
+                0xFF48 => self.state.obp0,
+                0xFF49 => self.state.obp1,
+                0xFF4A => self.state.wy,
+                0xFF4B => self.state.wx,
+
+                _ => 0xFF,
+            }
+        };
+
+        self.state = match self.gen.as_mut().resume(self.state.clone()) {
+            GeneratorState::Yielded(state) => state,
+            GeneratorState::Complete(_) => unreachable!(),
+        };
+
+        PpuOutputPins {
+            data,
+            vblank_interrupt: self.state.vblank_irq,
+            stat_interrupt: self.state.stat_irq,
+        }
+    }
+
+    fn get_frame(&self) -> &Frame {
+        &self.state.frame
     }
 }
