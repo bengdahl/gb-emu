@@ -9,17 +9,17 @@ pub struct Frame {
 
 #[derive(Debug, Clone, Copy)]
 pub struct PpuInputPins {
-    addr: u16,
-    data: u8,
-    is_write: bool,
+    pub addr: u16,
+    pub data: u8,
+    pub is_read: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct PpuOutputPins {
-    data: u8,
+    pub data: u8,
 
-    vblank_interrupt: bool,
-    stat_interrupt: bool,
+    pub vblank_interrupt: bool,
+    pub stat_interrupt: bool,
 }
 
 pub trait PPU {

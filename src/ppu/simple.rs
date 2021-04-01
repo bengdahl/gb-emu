@@ -5,24 +5,24 @@ use std::{ops::GeneratorState, rc::Rc};
 
 #[derive(Clone)]
 pub struct PpuSimpleState {
-    tile_data: [u8; 0x9800 - 0x8000],
+    pub tile_data: [u8; 0x9800 - 0x8000],
 
-    bg_map_1: [u8; 0x9C00 - 0x9800],
-    bg_map_2: [u8; 0xA000 - 0x9C00],
+    pub bg_map_1: [u8; 0x9C00 - 0x9800],
+    pub bg_map_2: [u8; 0xA000 - 0x9C00],
 
-    oam: [u8; 0xFEA0 - 0xFE00],
+    pub oam: [u8; 0xFEA0 - 0xFE00],
 
-    lcdc: u8,
-    stat: u8,
-    scy: u8,
-    scx: u8,
-    ly: u8,
-    lyc: u8,
-    wy: u8,
-    wx: u8,
-    bgp: u8,
-    obp0: u8,
-    obp1: u8,
+    pub lcdc: u8,
+    pub stat: u8,
+    pub scy: u8,
+    pub scx: u8,
+    pub ly: u8,
+    pub lyc: u8,
+    pub wy: u8,
+    pub wx: u8,
+    pub bgp: u8,
+    pub obp0: u8,
+    pub obp1: u8,
 
     vblank_irq: bool,
     stat_irq: bool,
@@ -125,25 +125,65 @@ fn ppu_gen() -> impl std::ops::Generator<PpuSimpleState, Yield = PpuSimpleState,
         for line in 0..144 {
             ppu.set_ly(line);
 
-            let mut dot = 0;
+            let mut cycle = 0;
             // OAM Search (mode 2)
             ppu.set_mode(2);
             for _ in 0..80 {
-                dot += 1;
+                cycle += 1;
                 ppu = yield ppu;
             }
 
             // Drawing (mode 3)
+            // TODO: this only draws the background for now
             ppu.set_mode(3);
-            // TODO: this loop has variable duration
-            for _ in 0..168 {
-                dot += 1;
-                ppu = yield ppu;
+            let mut dot = 0;
+            let mut screen_tile_x = 0;
+            let mut x = ppu.scx;
+            while dot < 160 {
+                let tilemap = if ppu.lcdc & 0x08 != 0 {
+                    &ppu.bg_map_2
+                } else {
+                    &ppu.bg_map_1
+                };
+
+                let fetcher_x = ((ppu.scx / 8) + screen_tile_x) & 0x1F;
+                let fetcher_y = ((ppu.scy + line) & 0xFF) / 8;
+                let tile_idx = tilemap[(fetcher_y * 32 + fetcher_x) as usize];
+
+                let tile_y = (ppu.scy + line) % 8;
+
+                let (bg_fifo_lo, bg_fifo_hi) = if ppu.lcdc & 0x10 != 0 {
+                    // $8000 method
+                    let offset = (tile_idx * 16 + tile_y * 2) as usize;
+                    (ppu.tile_data[offset + 0], ppu.tile_data[offset + 1])
+                } else {
+                    // $8800 method
+                    let offset =
+                        (0x1000 + (tile_idx as i8 as i16) * 16 + (tile_y as i16) * 2) as usize;
+                    (ppu.tile_data[offset + 0], ppu.tile_data[offset + 1])
+                };
+
+                while x < 8 {
+                    let bit = 7 - x;
+                    x += 1;
+                    let bg_color_hi = (bg_fifo_hi >> bit) & 1;
+                    let bg_color_lo = (bg_fifo_lo >> bit) & 1;
+                    let bg_color = (bg_color_hi << 1) | bg_color_lo;
+
+                    let bg_color_rgb = calculate_monochrome_color(ppu.bgp, bg_color);
+                    frame.pixels[(160 * line + dot) as usize] = bg_color_rgb;
+                    dot += 1;
+
+                    cycle += 1;
+                    ppu = yield ppu;
+                }
+                x = 0;
+                screen_tile_x += 1;
             }
 
             // HBlank (mode 0)
-            while dot < 456 {
-                dot += 1;
+            while cycle < 456 {
+                cycle += 1;
                 ppu = yield ppu;
             }
         }
@@ -165,7 +205,7 @@ fn ppu_gen() -> impl std::ops::Generator<PpuSimpleState, Yield = PpuSimpleState,
 
 impl super::PPU for PpuSimple {
     fn clock(&mut self, input: PpuInputPins) -> PpuOutputPins {
-        let data = if input.is_write {
+        let data = if !input.is_read {
             let v = input.data;
             match input.addr {
                 0x8000..=0x97FF => self.state.tile_data[input.addr as usize - 0x8000] = v,
@@ -189,7 +229,7 @@ impl super::PPU for PpuSimple {
                 0xFF49 => self.state.obp1 = v,
                 0xFF4A => self.state.wy = v,
                 0xFF4B => self.state.wx = v,
-                _ => (),
+                _ => panic!(),
             }
             0
         } else {
@@ -213,7 +253,7 @@ impl super::PPU for PpuSimple {
                 0xFF4A => self.state.wy,
                 0xFF4B => self.state.wx,
 
-                _ => 0xFF,
+                _ => panic!(),
             }
         };
 
@@ -231,5 +271,17 @@ impl super::PPU for PpuSimple {
 
     fn get_frame(&self) -> &Frame {
         &self.state.frame
+    }
+}
+
+fn calculate_monochrome_color(palette: u8, pix: u8) -> u32 {
+    assert!(pix < 4);
+    let color = (palette >> (pix * 2)) & 0x03;
+    match color {
+        0 => 0x00FFFFFF,
+        1 => 0x00AAAAAA,
+        2 => 0x00777777,
+        3 => 0x00000000,
+        _ => unreachable!(),
     }
 }
