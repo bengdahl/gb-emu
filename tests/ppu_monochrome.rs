@@ -74,3 +74,35 @@ fn ppu_bgp() {
         }
     }
 }
+
+#[test]
+fn calculate_monochrome_color() {
+    let tests = vec![
+        (
+            0b11100100,
+            vec![(0b00, 0b00), (0b01, 0b01), (0b10, 0b10), (0b11, 0b11)],
+        ),
+        (
+            0b00011011,
+            vec![(0b00, 0b11), (0b01, 0b10), (0b10, 0b01), (0b11, 0b00)],
+        ),
+    ];
+
+    for (bgp, cases) in tests {
+        for (color, result) in cases {
+            let expected = match result {
+                0 => ppu::monochrome::color::COLOR_WHITE,
+                1 => ppu::monochrome::color::COLOR_LIGHTGRAY,
+                2 => ppu::monochrome::color::COLOR_DARKGRAY,
+                3 => ppu::monochrome::color::COLOR_BLACK,
+                _ => unreachable!(),
+            };
+            let actual = ppu::monochrome::color::calculate_monochrome_color(bgp, color);
+            assert_eq!(
+                expected, actual,
+                "bgp: {:b}, color: {:b}, expected: {:X}, actual: {:X}",
+                bgp, color, expected, actual
+            );
+        }
+    }
+}
