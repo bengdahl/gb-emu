@@ -18,6 +18,16 @@ pub enum CpuOutputPins {
     Write { addr: u16, data: u8 },
 }
 
+impl CpuOutputPins {
+    #[inline]
+    pub fn addr(&self) -> u16 {
+        match self {
+            Self::Read { addr } => *addr,
+            Self::Write { addr, .. } => *addr,
+        }
+    }
+}
+
 #[derive(Default, Debug, Clone, Copy)]
 pub struct CpuInputPins {
     pub data: u8,

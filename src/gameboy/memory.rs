@@ -1,3 +1,5 @@
+use crate::cpu::{CpuInputPins, CpuOutputPins};
+
 pub struct Memory {
     work_ram_1: [u8; 0x1000],
     work_ram_2: [u8; 0x1000],
@@ -43,4 +45,30 @@ impl std::ops::IndexMut<u16> for Memory {
             _ => panic!("Out of bounds: {}", index),
         }
     }
+}
+
+impl super::Chip for Memory {
+    fn chip_select(&self, addr: u16) -> bool {
+        Self::address_is_in_range(addr)
+    }
+
+    fn clock(&mut self, input: CpuOutputPins) -> CpuInputPins {
+        match input {
+            CpuOutputPins::Read { addr } => {
+                debug_assert!(Self::address_is_in_range(addr));
+
+                CpuInputPins {
+                    data: self[addr],
+                    ..Default::default()
+                }
+            }
+            CpuOutputPins::Write { addr, data } => {
+                debug_assert!(Self::address_is_in_range(addr));
+                self[addr] = data;
+                Default::default()
+            }
+        }
+    }
+
+    fn clock_unselected(&mut self) {}
 }

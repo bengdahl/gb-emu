@@ -1,6 +1,8 @@
 //! An implementation of the Gameboy monochrome PPU
 
-use super::{registers::*, PpuInputPins, PpuOutputPins};
+use crate::cpu::{CpuInputPins, CpuOutputPins};
+
+use super::{registers::*, PPU};
 use std::{cell::RefCell, fmt::Debug, ops::GeneratorState, rc::Rc};
 
 pub const FRAME_T_CYCLES: usize = 70224;
@@ -144,63 +146,6 @@ impl MonochromePpuState {
 
         self.stat_irq = mode_int | lyc_int;
     }
-
-    #[inline]
-    fn perform_io(&mut self, input: PpuInputPins) -> u8 {
-        match input {
-            PpuInputPins::Write { addr, data: v } => {
-                match addr {
-                    0x8000..=0x97FF => self.tile_data[addr as usize - 0x8000] = v,
-                    0x9800..=0x9BFF => self.bg_map_1[addr as usize - 0x9800] = v,
-                    0x9C00..=0x9FFF => self.bg_map_1[addr as usize - 0x9C00] = v,
-
-                    0xFE00..=0xFE9F => self.oam[addr as usize - 0xFE00] = v,
-
-                    0xFF40 => self.lcdc = LCDC::from_bits_truncate(v),
-                    0xFF41 => {
-                        self.stat = STAT::from_bits_truncate(v);
-                        self.update_stat_interrupt();
-                    }
-                    0xFF42 => self.scy = v,
-                    0xFF43 => self.scx = v,
-                    0xFF44 => self.ly = v,
-                    0xFF45 => self.lyc = v,
-                    // 0xFF46 => DMA,
-                    0xFF47 => self.bgp = v,
-                    0xFF48 => self.obp0 = v,
-                    0xFF49 => self.obp1 = v,
-                    0xFF4A => self.wy = v,
-                    0xFF4B => self.wx = v,
-                    _ => panic!(),
-                }
-                0
-            }
-            PpuInputPins::Read { addr } => {
-                match addr {
-                    0x8000..=0x97FF => self.tile_data[addr as usize - 0x8000],
-                    0x9800..=0x9BFF => self.bg_map_1[addr as usize - 0x9800],
-                    0x9C00..=0x9FFF => self.bg_map_1[addr as usize - 0x9C00],
-
-                    0xFE00..=0xFE9F => self.oam[addr as usize - 0xFE00],
-
-                    0xFF40 => self.lcdc.bits(),
-                    0xFF41 => self.stat.bits(),
-                    0xFF42 => self.scy,
-                    0xFF43 => self.scx,
-                    0xFF44 => self.ly,
-                    0xFF45 => self.lyc,
-                    // 0xFF46 => DMA,
-                    0xFF47 => self.bgp,
-                    0xFF48 => self.obp0,
-                    0xFF49 => self.obp1,
-                    0xFF4A => self.wy,
-                    0xFF4B => self.wx,
-
-                    _ => panic!(),
-                }
-            }
-        }
-    }
 }
 
 fn ppu_gen() -> impl std::ops::Generator<
@@ -268,8 +213,9 @@ fn ppu_gen() -> impl std::ops::Generator<
                     let bg_color = (bg_color_hi << 1) | bg_color_lo;
 
                     let bg_color_rgb =
-                        color::calculate_monochrome_color(ppu.borrow().bgp, bg_color);
-                    frame.pixels[160 * line as usize + dot as usize] = bg_color_rgb;
+                        color::calculate_monochrome_color_id(ppu.borrow().bgp, bg_color);
+                    frame.pixels[160 * line as usize + dot as usize] =
+                        color::COLORS[bg_color_rgb as usize];
                     dot += 1;
 
                     cycle += 1;
@@ -301,17 +247,75 @@ fn ppu_gen() -> impl std::ops::Generator<
     }
 }
 
-impl super::PPU for MonochromePpu {
+impl PPU for MonochromePpu {
     type Frame = Frame;
 
     #[inline]
-    fn clock(&mut self, input: Option<PpuInputPins>) -> PpuOutputPins {
-        let data = if let Some(input) = input {
-            self.state.borrow_mut().perform_io(input)
-        } else {
-            0
+    fn perform_io(&mut self, input: CpuOutputPins) -> CpuInputPins {
+        let mut state = self.state.borrow_mut();
+        let data = match input {
+            CpuOutputPins::Write { addr, data: v } => {
+                match addr {
+                    0x8000..=0x97FF => state.tile_data[addr as usize - 0x8000] = v,
+                    0x9800..=0x9BFF => state.bg_map_1[addr as usize - 0x9800] = v,
+                    0x9C00..=0x9FFF => state.bg_map_1[addr as usize - 0x9C00] = v,
+
+                    0xFE00..=0xFE9F => state.oam[addr as usize - 0xFE00] = v,
+
+                    0xFF40 => state.lcdc = LCDC::from_bits_truncate(v),
+                    0xFF41 => {
+                        state.stat = STAT::from_bits_truncate(v);
+                        state.update_stat_interrupt();
+                    }
+                    0xFF42 => state.scy = v,
+                    0xFF43 => state.scx = v,
+                    0xFF44 => state.ly = v,
+                    0xFF45 => state.lyc = v,
+                    // 0xFF46 => DMA,
+                    0xFF47 => state.bgp = v,
+                    0xFF48 => state.obp0 = v,
+                    0xFF49 => state.obp1 = v,
+                    0xFF4A => state.wy = v,
+                    0xFF4B => state.wx = v,
+                    _ => panic!(),
+                }
+                0
+            }
+            CpuOutputPins::Read { addr } => {
+                match addr {
+                    0x8000..=0x97FF => state.tile_data[addr as usize - 0x8000],
+                    0x9800..=0x9BFF => state.bg_map_1[addr as usize - 0x9800],
+                    0x9C00..=0x9FFF => state.bg_map_1[addr as usize - 0x9C00],
+
+                    0xFE00..=0xFE9F => state.oam[addr as usize - 0xFE00],
+
+                    0xFF40 => state.lcdc.bits(),
+                    0xFF41 => state.stat.bits(),
+                    0xFF42 => state.scy,
+                    0xFF43 => state.scx,
+                    0xFF44 => state.ly,
+                    0xFF45 => state.lyc,
+                    // 0xFF46 => DMA,
+                    0xFF47 => state.bgp,
+                    0xFF48 => state.obp0,
+                    0xFF49 => state.obp1,
+                    0xFF4A => state.wy,
+                    0xFF4B => state.wx,
+
+                    _ => panic!(),
+                }
+            }
         };
 
+        CpuInputPins {
+            data,
+            interrupt_40h: state.vblank_irq,
+            interrupt_48h: state.stat_irq,
+            ..Default::default()
+        }
+    }
+
+    fn clock_t_state(&mut self) {
         // im not sure if theres a good way to borrow an object only for the duration of a generator run,
         // so instead i just clone the state in and out of the generator context. unfortunately this means
         // i have to use Rc<RefCell> to avoid doing huge copies hundreds of times a second
@@ -319,12 +323,6 @@ impl super::PPU for MonochromePpu {
             GeneratorState::Yielded(state) => state,
             GeneratorState::Complete(_) => unreachable!(),
         };
-
-        PpuOutputPins {
-            data,
-            vblank_interrupt: self.state.borrow().vblank_irq,
-            stat_interrupt: self.state.borrow().stat_irq,
-        }
     }
 
     fn get_frame(&self) -> Frame {
@@ -338,15 +336,10 @@ pub mod color {
     pub const COLOR_LIGHTGRAY: u32 = 0x00AAAAAA;
     pub const COLOR_WHITE: u32 = 0x00FFFFFF;
 
-    pub fn calculate_monochrome_color(palette: u8, pix: u8) -> u32 {
+    pub const COLORS: [u32; 4] = [COLOR_WHITE, COLOR_LIGHTGRAY, COLOR_DARKGRAY, COLOR_BLACK];
+
+    pub fn calculate_monochrome_color_id(palette: u8, pix: u8) -> usize {
         assert!(pix < 4);
-        let color = (palette >> (pix * 2)) & 0x03;
-        match color {
-            0 => COLOR_WHITE,
-            1 => COLOR_LIGHTGRAY,
-            2 => COLOR_DARKGRAY,
-            3 => COLOR_BLACK,
-            _ => unreachable!(),
-        }
+        ((palette >> (pix * 2)) & 0x03) as usize
     }
 }
