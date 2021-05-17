@@ -9,36 +9,20 @@ impl super::Cpu {
     fn fetch_byte(&mut self) -> CpuOutputPins {
         let pc = self.registers.get_pc();
         self.registers.set_pc(pc.wrapping_add(1));
-        CpuOutputPins {
-            addr: pc,
-            data: 0,
-            is_read: true,
-        }
+        CpuOutputPins::Read { addr: pc }
     }
 
     /// Set the pins to write a byte to memory
     fn write_byte(&self, addr: u16, data: u8) -> CpuOutputPins {
-        CpuOutputPins {
-            addr,
-            data,
-            is_read: false,
-        }
+        CpuOutputPins::Write { addr, data }
     }
 
     fn read_byte(&self, addr: u16) -> CpuOutputPins {
-        CpuOutputPins {
-            addr,
-            data: 0,
-            is_read: true,
-        }
+        CpuOutputPins::Read { addr }
     }
 
     fn nop(&self) -> CpuOutputPins {
-        CpuOutputPins {
-            addr: 0,
-            data: 0,
-            is_read: true,
-        }
+        CpuOutputPins::Read { addr: 0 }
     }
 
     fn store_16_bits(&mut self, v: u16, dest: LoadDest16Bit) {

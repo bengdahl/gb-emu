@@ -47,15 +47,13 @@ impl<Model: models::GbModel> Gameboy<Model> {
         let cpu_input: CpuInputPins;
         let ppu_input: PpuInputPins;
 
-        if cpu_out.is_read {
-            match cpu_out.addr {
+        match cpu_out {
+            CpuOutputPins::Read { addr } => match addr {
                 0x0000..=0x7FFF => todo!("Cartridge ROM support"),
-                0x8000..=0x9FFF | 0xFE00..=0xFE9F => {
-                    ppu_input = PpuInputPins::Read { addr: cpu_out.addr }
-                }
+                0x8000..=0x9FFF | 0xFE00..=0xFE9F => ppu_input = PpuInputPins::Read { addr },
                 0xA000..=0xBFFF => todo!("Cartridge RAM support"),
                 0xC000..=0xDFFF | 0xFF80..=0xFFFE => {
-                    let v = self.memory[cpu_out.addr];
+                    let v = self.memory[addr];
                     cpu_input = CpuInputPins {
                         data: v,
                         ..Default::default()
@@ -64,22 +62,16 @@ impl<Model: models::GbModel> Gameboy<Model> {
                 0xE000..=0xFDFF => todo!("Echo address support"),
                 0xFEA0..=0xFF7F => todo!("IO"),
                 0xFFFF => todo!("IE"),
-            }
-        } else {
-            match cpu_out.addr {
+            },
+            CpuOutputPins::Write { addr, data } => match addr {
                 0x0000..=0x7FFF => todo!("Cartridge ROM support"),
-                0x8000..=0x9FFF | 0xFE00..=0xFE9F => {
-                    ppu_input = PpuInputPins::Write {
-                        addr: cpu_out.addr,
-                        data: cpu_out.data,
-                    }
-                }
+                0x8000..=0x9FFF | 0xFE00..=0xFE9F => ppu_input = PpuInputPins::Write { addr, data },
                 0xA000..=0xBFFF => todo!("Cartridge RAM support"),
-                0xC000..=0xDFFF | 0xFF80..=0xFFFE => self.memory[cpu_out.addr] = cpu_out.data,
+                0xC000..=0xDFFF | 0xFF80..=0xFFFE => self.memory[addr] = data,
                 0xE000..=0xFDFF => todo!("Echo address support"),
                 0xFEA0..=0xFF7F => todo!("IO"),
                 0xFFFF => todo!("IE"),
-            }
+            },
         }
     }
 }

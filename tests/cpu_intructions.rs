@@ -98,20 +98,11 @@ impl InstructionTest {
                     }
 
                     match out {
-                        CpuOutputPins {
-                            is_read: true,
-                            addr,
-                            ..
-                        } => {
+                        CpuOutputPins::Read { addr } => {
                             self.last_access = addr;
                             self.to_write = None;
                         }
-                        CpuOutputPins {
-                            is_read: false,
-                            addr,
-                            data,
-                            ..
-                        } => {
+                        CpuOutputPins::Write { addr, data } => {
                             self.last_access = addr;
                             self.to_write = Some(data);
                         }
@@ -151,11 +142,7 @@ fn nop() {
             ..Default::default()
         }),
         // Should fetch first instruction
-        CpuOutputPins {
-            is_read: true,
-            addr: 0,
-            ..
-        }
+        CpuOutputPins::Read { addr: 0 }
     ),);
 
     assert!(matches!(
@@ -164,11 +151,7 @@ fn nop() {
             ..Default::default()
         }),
         // Recieved NOP, should immediately fetch next instruction due to fetch/execute overlap
-        CpuOutputPins {
-            is_read: true,
-            addr: 1,
-            ..
-        }
+        CpuOutputPins::Read { addr: 1 }
     ));
 }
 

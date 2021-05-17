@@ -13,10 +13,9 @@ pub struct Cpu {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct CpuOutputPins {
-    pub addr: u16,
-    pub data: u8,
-    pub is_read: bool,
+pub enum CpuOutputPins {
+    Read { addr: u16 },
+    Write { addr: u16, data: u8 },
 }
 
 #[derive(Default, Debug, Clone, Copy)]
