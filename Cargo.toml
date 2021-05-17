@@ -11,3 +11,4 @@ name = "gb_core"
 
 [dependencies]
 paste = "1.0.4"
+bitflags = "1.2"
