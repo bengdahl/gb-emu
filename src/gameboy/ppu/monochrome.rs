@@ -1,12 +1,7 @@
 //! An implementation of the Gameboy monochrome PPU
 
 use super::{registers::*, PpuInputPins, PpuOutputPins};
-use std::{
-    cell::{Ref, RefCell},
-    fmt::Debug,
-    ops::GeneratorState,
-    rc::Rc,
-};
+use std::{cell::RefCell, fmt::Debug, ops::GeneratorState, rc::Rc};
 
 pub const FRAME_T_CYCLES: usize = 70224;
 
