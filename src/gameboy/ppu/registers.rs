@@ -1,7 +1,6 @@
 use bitflags::bitflags;
 
 bitflags! {
-    #[derive(Default)]
     pub struct LCDC: u8 {
         const LCD_ENABLE = 0x80;
         const WINDOW_TILEMAP_AREA = 0x40;
@@ -12,6 +11,12 @@ bitflags! {
         const OBJ_ENABLE = 0x02;
         const BG_ENABLE = 0x01;
         const BG_PRIORITY = 0x01;
+    }
+}
+
+impl Default for LCDC {
+    fn default() -> Self {
+        LCDC::LCD_ENABLE | LCDC::BG_TILE_DATA_AREA | LCDC::BG_ENABLE
     }
 }
 

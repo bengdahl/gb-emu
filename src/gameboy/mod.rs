@@ -1,3 +1,4 @@
+pub mod cart;
 pub mod memory;
 pub mod ppu;
 
@@ -5,11 +6,14 @@ use crate::cpu::{CpuInputPins, CpuOutputPins, CpuRunner};
 use memory::Memory;
 use ppu::PPU;
 
+use self::{cart::Cart, models::DMG};
+
 pub struct Gameboy<Model: models::GbModel> {
     cpu: CpuRunner,
     ppu: Model::PPU,
     cpu_input: CpuInputPins,
     memory: Memory,
+    cart: cart::Cart,
 }
 
 pub mod models {
@@ -31,12 +35,24 @@ pub mod models {
     // impl GbModel for SGB {}
 }
 
+impl Gameboy<DMG> {
+    pub fn new(rom: Vec<u8>) -> Result<Self, &'static str> {
+        Ok(Gameboy {
+            cpu: crate::cpu::Cpu::default().runner(),
+            ppu: ppu::monochrome::MonochromePpu::new(),
+            cpu_input: CpuInputPins::default(),
+            memory: Memory::new(),
+            cart: Cart::new(rom)?,
+        })
+    }
+}
+
 impl<Model: models::GbModel> Gameboy<Model> {
     /// Clock the entire gameboy by M-cycle
     pub fn clock(&mut self) {
         let cpu_out = self.cpu.clock(self.cpu_input);
 
-        let chips: &mut [&mut dyn Chip] = &mut [&mut self.ppu as &mut dyn Chip, &mut self.memory];
+        let chips: &mut [&mut dyn Chip] = &mut [&mut self.ppu, &mut self.memory, &mut self.cart];
 
         self.cpu_input = {
             let mut chip_outputs = chips.iter_mut().filter_map(|chip| {
@@ -59,33 +75,6 @@ impl<Model: models::GbModel> Gameboy<Model> {
                 }
             }
         }
-
-        // let cpu_input = match cpu_out {
-        //     CpuOutputPins::Read { addr } => match addr {
-        //         0x0000..=0x7FFF => todo!("Cartridge ROM support"),
-        //         0x8000..=0x9FFF | 0xFE00..=0xFE9F => self.ppu.clock(cpu_out),
-        //         0xA000..=0xBFFF => todo!("Cartridge RAM support"),
-        //         0xC000..=0xDFFF | 0xFF80..=0xFFFE => {
-        //             let v = self.memory[addr];
-        //             cpu_input = CpuInputPins {
-        //                 data: v,
-        //                 ..Default::default()
-        //             };
-        //         }
-        //         0xE000..=0xFDFF => todo!("Echo address support"),
-        //         0xFEA0..=0xFF7F => todo!("IO"),
-        //         0xFFFF => todo!("IE"),
-        //     },
-        //     CpuOutputPins::Write { addr, data } => match addr {
-        //         0x0000..=0x7FFF => todo!("Cartridge ROM support"),
-        //         0x8000..=0x9FFF | 0xFE00..=0xFE9F => ppu_input = PpuInputPins::Write { addr, data },
-        //         0xA000..=0xBFFF => todo!("Cartridge RAM support"),
-        //         0xC000..=0xDFFF | 0xFF80..=0xFFFE => self.memory[addr] = data,
-        //         0xE000..=0xFDFF => todo!("Echo address support"),
-        //         0xFEA0..=0xFF7F => todo!("IO"),
-        //         0xFFFF => todo!("IE"),
-        //     },
-        // }
     }
 }
 
