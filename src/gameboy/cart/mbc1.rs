@@ -32,7 +32,7 @@ impl<R: ram::Ram> Mbc1Generic<R> {
         }
         let remainder = {
             let mut buf = [0; 0x4000];
-            buf.copy_from_slice(banks.remainder());
+            buf[..banks.remainder().len()].copy_from_slice(banks.remainder());
             buf
         };
 
