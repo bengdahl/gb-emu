@@ -25,7 +25,7 @@ impl Chip for Rom {
         }
     }
     fn chip_select(&self, addr: u16) -> bool {
-        (0x0000..=0x7FFF).contains(&addr)
+        matches!(addr, 0x0000..=0x7FFF)
     }
 }
 impl Mapper for Rom {}

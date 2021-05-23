@@ -1,7 +1,9 @@
+mod mbc1;
 mod rom;
 
 use super::Chip;
 use crate::cpu::{CpuInputPins, CpuOutputPins};
+use mbc1::{Mbc1, Mbc1WithBatteryRam, Mbc1WithRam};
 
 trait Mapper: Chip {}
 
@@ -34,6 +36,9 @@ impl Cart {
 fn mapper_from_id(id: u8, data: Vec<u8>) -> Box<dyn Mapper> {
     match id {
         0 => Box::new(rom::Rom::new(data)),
+        1 => Box::new(Mbc1::new(data)),
+        2 => Box::new(Mbc1WithRam::new(data)),
+        3 => Box::new(Mbc1WithBatteryRam::new(data)),
         _ => panic!("Mapper unimplemented: {:02X}", id),
     }
 }
