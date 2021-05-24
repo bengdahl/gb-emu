@@ -189,13 +189,13 @@ fn ppu_gen() -> impl std::ops::Generator<
                     let tile_data = ppu.tile_data;
 
                     let fetcher_x = ((ppu.scx / 8) + screen_tile_x) & 0x1F;
-                    let fetcher_y = ((ppu.scy + line) & 0xFF) / 8;
+                    let fetcher_y = ppu.scy.wrapping_add(line) / 8;
                     let tile_idx = tilemap[fetcher_y as usize * 32 + fetcher_x as usize];
 
-                    let tile_y = (ppu.scy + line) % 8;
+                    let tile_y = ppu.scy.wrapping_add(line) % 8;
                     if ppu.lcdc.contains(LCDC::BG_TILE_DATA_AREA) {
                         // $8000 method
-                        let offset = (tile_idx * 16 + tile_y * 2) as usize;
+                        let offset = tile_idx as usize * 16 + tile_y as usize * 2;
                         (tile_data[offset + 0], tile_data[offset + 1])
                     } else {
                         // $8800 method
@@ -271,40 +271,38 @@ impl PPU for MonochromePpu {
                     0xFF43 => state.scx = v,
                     0xFF44 => state.ly = v,
                     0xFF45 => state.lyc = v,
-                    // 0xFF46 => DMA,
+                    0xFF46 => (),
                     0xFF47 => state.bgp = v,
                     0xFF48 => state.obp0 = v,
                     0xFF49 => state.obp1 = v,
                     0xFF4A => state.wy = v,
                     0xFF4B => state.wx = v,
-                    _ => panic!(),
+                    _ => panic!("{:?}", input),
                 }
                 0
             }
-            CpuOutputPins::Read { addr } => {
-                match addr {
-                    0x8000..=0x97FF => state.tile_data[addr as usize - 0x8000],
-                    0x9800..=0x9BFF => state.bg_map_1[addr as usize - 0x9800],
-                    0x9C00..=0x9FFF => state.bg_map_1[addr as usize - 0x9C00],
+            CpuOutputPins::Read { addr } => match addr {
+                0x8000..=0x97FF => state.tile_data[addr as usize - 0x8000],
+                0x9800..=0x9BFF => state.bg_map_1[addr as usize - 0x9800],
+                0x9C00..=0x9FFF => state.bg_map_1[addr as usize - 0x9C00],
 
-                    0xFE00..=0xFE9F => state.oam[addr as usize - 0xFE00],
+                0xFE00..=0xFE9F => state.oam[addr as usize - 0xFE00],
 
-                    0xFF40 => state.lcdc.bits(),
-                    0xFF41 => state.stat.bits(),
-                    0xFF42 => state.scy,
-                    0xFF43 => state.scx,
-                    0xFF44 => state.ly,
-                    0xFF45 => state.lyc,
-                    // 0xFF46 => DMA,
-                    0xFF47 => state.bgp,
-                    0xFF48 => state.obp0,
-                    0xFF49 => state.obp1,
-                    0xFF4A => state.wy,
-                    0xFF4B => state.wx,
+                0xFF40 => state.lcdc.bits(),
+                0xFF41 => state.stat.bits(),
+                0xFF42 => state.scy,
+                0xFF43 => state.scx,
+                0xFF44 => state.ly,
+                0xFF45 => state.lyc,
+                0xFF46 => 0,
+                0xFF47 => state.bgp,
+                0xFF48 => state.obp0,
+                0xFF49 => state.obp1,
+                0xFF4A => state.wy,
+                0xFF4B => state.wx,
 
-                    _ => panic!(),
-                }
-            }
+                _ => panic!("{:?}", input),
+            },
         };
 
         CpuInputPins {
@@ -331,10 +329,10 @@ impl PPU for MonochromePpu {
 }
 
 pub mod color {
-    pub const COLOR_BLACK: u32 = 0x00000000;
-    pub const COLOR_DARKGRAY: u32 = 0x00777777;
-    pub const COLOR_LIGHTGRAY: u32 = 0x00AAAAAA;
-    pub const COLOR_WHITE: u32 = 0x00FFFFFF;
+    pub const COLOR_BLACK: u32 = 0xFF000000;
+    pub const COLOR_DARKGRAY: u32 = 0xFF777777;
+    pub const COLOR_LIGHTGRAY: u32 = 0xFFAAAAAA;
+    pub const COLOR_WHITE: u32 = 0xFFFFFFFF;
 
     pub const COLORS: [u32; 4] = [COLOR_WHITE, COLOR_LIGHTGRAY, COLOR_DARKGRAY, COLOR_BLACK];
 
