@@ -69,11 +69,7 @@ impl<R: ram::Ram> Mbc1Generic<R> {
         } else {
             self.rom_bank_lower
         };
-        let bank_idx = if self.mode_select {
-            self.rom_bank_upper << 5 + lower
-        } else {
-            0
-        };
+        let bank_idx = (self.rom_bank_upper << 5) + lower;
         &mut self.data[bank_idx as usize]
     }
 }
