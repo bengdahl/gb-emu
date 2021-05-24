@@ -45,7 +45,7 @@ mod registers {
         ops::{BitAnd, BitOr, BitOrAssign, Not},
     };
 
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+    #[derive(Clone, Copy, PartialEq, Eq, Default)]
     pub struct Registers {
         pub a: u8,
         pub f: FRegister,
@@ -57,6 +57,23 @@ mod registers {
         pub l: u8,
         pub sp: u16,
         pub pc: u16,
+    }
+
+    impl Debug for Registers {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("Registers")
+                .field("A", &format_args!("{:02X}", self.a))
+                .field("B", &format_args!("{:02X}", self.b))
+                .field("C", &format_args!("{:02X}", self.c))
+                .field("D", &format_args!("{:02X}", self.d))
+                .field("E", &format_args!("{:02X}", self.e))
+                .field("H", &format_args!("{:02X}", self.h))
+                .field("L", &format_args!("{:02X}", self.l))
+                .field("SP", &format_args!("{:04X}", self.sp))
+                .field("PC", &format_args!("{:04X}", self.pc))
+                .field("F", &self.f)
+                .finish()
+        }
     }
 
     macro_rules! reg_setters_and_getters {

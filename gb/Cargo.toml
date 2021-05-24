@@ -7,4 +7,12 @@ edition = "2018"
 
 [dependencies]
 gb_core = { path = ".." }
-iced = "0.3"
+iced = { version = "0.3", features = ["image", "smol"] }
+iced_futures = "*"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+iced_native = "0.4"
+iced_graphics = "0.2"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+iced_web = "0.4"

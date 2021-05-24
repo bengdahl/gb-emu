@@ -45,12 +45,36 @@ impl Gameboy<DMG> {
             cart: Cart::new(rom)?,
         })
     }
+
+    /// temporary
+    pub fn reset(&mut self) {
+        self.cpu.cpu.registers.pc = 0x100;
+        self.cpu.cpu.registers.sp = 0xFFFE;
+    }
 }
 
 impl<Model: models::GbModel> Gameboy<Model> {
     /// Clock the entire gameboy by M-cycle
     pub fn clock(&mut self) {
         let cpu_out = self.cpu.clock(self.cpu_input);
+
+        // remove later
+        static mut BREAKPOINT_HIT: bool = false;
+        let addr = match cpu_out {
+            CpuOutputPins::Write { addr, .. } => addr,
+            CpuOutputPins::Read { addr } => addr,
+        };
+        unsafe {
+            if addr == 0x63b {
+                BREAKPOINT_HIT = true;
+            }
+            if BREAKPOINT_HIT {
+                println!("{:?}", self.cpu.cpu);
+            }
+        }
+        if let CpuOutputPins::Write { addr: 0xff01, data } = cpu_out {
+            print!("{}", data as char)
+        }
 
         let chips: &mut [&mut dyn Chip] = &mut [&mut self.ppu, &mut self.memory, &mut self.cart];
 
@@ -70,11 +94,22 @@ impl<Model: models::GbModel> Gameboy<Model> {
             match cpu_input {
                 Some(c) => c,
                 None => {
-                    println!("empty bus: {:?}", self.cpu_input);
+                    // println!("empty bus: {:X?}", cpu_out);
                     CpuInputPins::default()
                 }
             }
         }
+    }
+}
+impl Gameboy<DMG> {
+    pub fn get_frame(&self) -> Vec<u8> {
+        let frame = self.ppu.get_frame();
+        frame
+            .pixels
+            .iter()
+            .copied()
+            .flat_map(|p| p.to_le_bytes())
+            .collect()
     }
 }
 

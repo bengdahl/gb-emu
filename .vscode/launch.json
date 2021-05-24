@@ -7,13 +7,50 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug executable 'gb'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=gb",
+                    "--package=gb"
+                ],
+                "filter": {
+                    "name": "gb",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'gb'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=gb",
+                    "--package=gb"
+                ],
+                "filter": {
+                    "name": "gb",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug unit tests in library 'gb_core'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=gb-emu"
+                    "--package=gb_core"
                 ],
                 "filter": {
                     "name": "gb_core",
@@ -32,7 +69,7 @@
                     "test",
                     "--no-run",
                     "--test=cpu_intructions",
-                    "--package=gb-emu"
+                    "--package=gb_core"
                 ],
                 "filter": {
                     "name": "cpu_intructions",
@@ -51,7 +88,7 @@
                     "test",
                     "--no-run",
                     "--test=ppu_monochrome",
-                    "--package=gb-emu"
+                    "--package=gb_core"
                 ],
                 "filter": {
                     "name": "ppu_monochrome",

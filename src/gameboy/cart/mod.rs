@@ -8,7 +8,7 @@ use mbc1::{Mbc1, Mbc1WithBatteryRam, Mbc1WithRam};
 trait Mapper: Chip {}
 
 pub struct Cart {
-    mapper: Box<dyn Mapper>,
+    mapper: Box<dyn Mapper + Send>,
 }
 
 impl Chip for Cart {
@@ -33,7 +33,7 @@ impl Cart {
     }
 }
 
-fn mapper_from_id(id: u8, data: Vec<u8>) -> Box<dyn Mapper> {
+fn mapper_from_id(id: u8, data: Vec<u8>) -> Box<dyn Mapper + Send> {
     match id {
         0 => Box::new(rom::Rom::new(data)),
         1 => Box::new(Mbc1::new(data)),
