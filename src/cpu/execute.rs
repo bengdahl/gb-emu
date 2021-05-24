@@ -537,7 +537,7 @@ fn cpu_runner_gen(
                     }
                     2 if opcode.q() == 0 => {
                         // LD to memory
-                        let addr = match opcode.y() {
+                        let addr = match opcode.p() {
                             0 => cpu.registers.get_bc(),
                             1 => cpu.registers.get_de(),
                             2 => {
@@ -557,7 +557,7 @@ fn cpu_runner_gen(
                     }
                     2 if opcode.q() == 1 => {
                         // LD from memory
-                        let addr = match opcode.y() {
+                        let addr = match opcode.p() {
                             0 => cpu.registers.get_bc(),
                             1 => cpu.registers.get_de(),
                             2 => {
@@ -1072,7 +1072,7 @@ fn cpu_runner_gen(
                         cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
                         let high = (v >> 8) as u8;
                         cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), high));
-                        cpu.registers.modify_sp(|sp| sp.wrapping_add(1));
+                        cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
                         let low = (v & 0x00ff) as u8;
                         cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), low));
                         continue;
