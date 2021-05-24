@@ -59,19 +59,19 @@ impl<Model: models::GbModel> Gameboy<Model> {
         let cpu_out = self.cpu.clock(self.cpu_input);
 
         // remove later
-        static mut BREAKPOINT_HIT: bool = false;
-        let addr = match cpu_out {
-            CpuOutputPins::Write { addr, .. } => addr,
-            CpuOutputPins::Read { addr } => addr,
-        };
-        unsafe {
-            if addr == 0x63b {
-                BREAKPOINT_HIT = true;
-            }
-            if BREAKPOINT_HIT {
-                println!("{:?}", self.cpu.cpu);
-            }
-        }
+        // static mut BREAKPOINT_HIT: bool = false;
+        // let addr = match cpu_out {
+        //     CpuOutputPins::Write { addr, .. } => addr,
+        //     CpuOutputPins::Read { addr } => addr,
+        // };
+        // unsafe {
+        //     if addr == 0x63b {
+        //         BREAKPOINT_HIT = true;
+        //     }
+        //     if BREAKPOINT_HIT {
+        //         println!("{:?}", self.cpu.cpu);
+        //     }
+        // }
         if let CpuOutputPins::Write { addr: 0xff01, data } = cpu_out {
             print!("{}", data as char)
         }

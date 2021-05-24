@@ -53,7 +53,7 @@ impl Application for App {
     }
 
     fn subscription(&self) -> iced::Subscription<Self::Message> {
-        iced_futures::time::every(std::time::Duration::from_millis(500)).map(|_| ())
+        iced_futures::time::every(std::time::Duration::from_millis(50)).map(|_| ())
     }
 
     fn background_color(&self) -> Color {

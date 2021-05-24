@@ -170,6 +170,34 @@ impl super::Cpu {
         }
     }
 
+    fn daa(&mut self) {
+        let mut f = self.registers.get_f();
+        let mut a = self.registers.get_a();
+
+        if !f.contains(FRegister::NEGATIVE) {
+            if f.contains(FRegister::HALFCARRY) || (a & 0x0F) > 0x09 {
+                a = a.wrapping_add(0x06);
+            }
+            if f.contains(FRegister::CARRY) || a > 0x99 {
+                a = a.wrapping_add(0x60);
+                f.set(FRegister::CARRY);
+            }
+        } else {
+            if f.contains(FRegister::HALFCARRY) {
+                a = a.wrapping_sub(0x06);
+            }
+            if f.contains(FRegister::CARRY) {
+                a = a.wrapping_sub(0x60);
+            }
+        }
+
+        f.set_value(FRegister::ZERO, a == 0);
+        f.unset(FRegister::HALFCARRY);
+
+        self.registers.set_f(f);
+        self.registers.set_a(a);
+    }
+
     fn do_rotate_shift(&mut self, v: u8, op: RotateShiftOperation) -> u8 {
         use RotateShiftOperation::*;
         match op {
@@ -466,7 +494,8 @@ fn cpu_runner_gen(
                             cpu_yield!(cpu.write_byte(addr + 1, sp_hi));
                             continue;
                         }
-                        2 => todo!("STOP"),
+                        2 => continue,
+                        // 2 => todo!("STOP"),
                         3 => {
                             // JR d
                             cpu_yield!(cpu.fetch_byte());
@@ -686,31 +715,7 @@ fn cpu_runner_gen(
                         }
                         4 => {
                             // DAA
-                            let mut f = cpu.registers.get_f();
-                            let mut a = cpu.registers.get_a();
-
-                            if !f.contains(FRegister::NEGATIVE) {
-                                if f.contains(FRegister::CARRY) || a > 0x99 {
-                                    a = a.wrapping_add(0x60);
-                                    f.set(FRegister::CARRY);
-                                }
-                                if f.contains(FRegister::HALFCARRY) || (a & 0x0F) > 0x09 {
-                                    a = a.wrapping_add(0x06);
-                                }
-                            } else {
-                                if f.contains(FRegister::CARRY) {
-                                    a = a.wrapping_sub(0x60);
-                                }
-                                if f.contains(FRegister::HALFCARRY) {
-                                    a = a.wrapping_sub(0x06);
-                                }
-                            }
-
-                            f.set_value(FRegister::ZERO, a == 0);
-                            f.unset(FRegister::HALFCARRY);
-
-                            cpu.registers.set_f(f);
-                            cpu.registers.set_a(a);
+                            cpu.daa();
                             continue;
                         }
                         5 => {
