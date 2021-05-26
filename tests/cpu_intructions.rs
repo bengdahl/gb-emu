@@ -292,13 +292,13 @@ fn sub() {
             .map(|(cpu, d)| (cpu.registers.get_f(), d))
             .collect::<Vec<_>>(),
         vec![
-            (FRegister::NEGATIVE, 5),
-            (FRegister::NEGATIVE | FRegister::CARRY, 0xFF),
-            (FRegister::NEGATIVE, 15),
+            (FRegister::NEGATIVE | FRegister::HALFCARRY, 5),
             (
-                FRegister::NEGATIVE | FRegister::ZERO | FRegister::HALFCARRY,
-                0
+                FRegister::NEGATIVE | FRegister::HALFCARRY | FRegister::CARRY,
+                0xFF
             ),
+            (FRegister::NEGATIVE | FRegister::HALFCARRY, 15),
+            (FRegister::NEGATIVE | FRegister::ZERO, 0),
         ]
     );
 }
@@ -328,14 +328,19 @@ fn add_hl() {
 
     let additions = [
         (0x0105, 0x010B, 0x0210, FRegister::EMPTY),
-        (0x00FF, 0x0001, 0x0100, FRegister::HALFCARRY),
+        (0x00FF, 0x0001, 0x0100, FRegister::EMPTY),
         (
             0xFFFF,
             0x0001,
             0x0000,
             FRegister::HALFCARRY | FRegister::CARRY,
         ),
-        (0xFF00, 0x0100, 0x0000, FRegister::CARRY),
+        (
+            0xFF00,
+            0x0100,
+            0x0000,
+            FRegister::CARRY | FRegister::HALFCARRY,
+        ),
         (
             0xFFFF,
             0xFFFF,
@@ -425,13 +430,10 @@ fn dec() {
             .map(|(cpu, d)| (cpu.registers.get_f(), d))
             .collect::<Vec<_>>(),
         vec![
-            (FRegister::NEGATIVE | FRegister::HALFCARRY, 0x20),
-            (FRegister::NEGATIVE, 0x1F),
-            (
-                FRegister::NEGATIVE | FRegister::ZERO | FRegister::HALFCARRY,
-                0
-            ),
-            (FRegister::NEGATIVE, 0xFF),
+            (FRegister::NEGATIVE, 0x20),
+            (FRegister::NEGATIVE | FRegister::HALFCARRY, 0x1F),
+            (FRegister::NEGATIVE | FRegister::ZERO, 0),
+            (FRegister::NEGATIVE | FRegister::HALFCARRY, 0xFF),
         ]
     );
 }

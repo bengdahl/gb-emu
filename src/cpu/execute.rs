@@ -65,21 +65,31 @@ impl super::Cpu {
                 })
             }
             Adc => {
-                let a = self.registers.get_a();
-                let (sum, overflow1) = a.overflowing_add(v);
-                let (sum, overflow2) =
-                    sum.overflowing_add(if self.registers.get_f().contains(FRegister::CARRY) {
-                        1
-                    } else {
-                        0
-                    });
-                let overflow = overflow1 | overflow2;
-                self.registers.set_a(sum);
+                let a = self.registers.get_a() as u16;
+                let v = v as u16;
+                let vc = if self.registers.get_f().contains(FRegister::CARRY) {
+                    v + 1
+                } else {
+                    v
+                };
+                let sum = a + vc;
+                let carry = sum >= 0x100;
+                let bytesum = sum as u8;
+
+                let al = a & 0x0f;
+                let vl = v & 0x0f;
+                let vlc = if self.registers.get_f().contains(FRegister::CARRY) {
+                    vl + 1
+                } else {
+                    vl
+                };
+                let halfcarry = vlc + al >= 0x10;
+                self.registers.set_a(bytesum);
                 self.registers.modify_f(|mut f| {
                     f.unset(FRegister::NEGATIVE);
-                    f.set_value(FRegister::ZERO, sum == 0);
-                    f.set_value(FRegister::HALFCARRY, (a & 0x0f) + (v & 0x0f) >= 0x10);
-                    f.set_value(FRegister::CARRY, overflow);
+                    f.set_value(FRegister::ZERO, bytesum == 0);
+                    f.set_value(FRegister::HALFCARRY, halfcarry);
+                    f.set_value(FRegister::CARRY, carry);
 
                     f
                 })
@@ -87,33 +97,43 @@ impl super::Cpu {
             Sub => {
                 let a = self.registers.get_a();
                 let nv = (!v).wrapping_add(1); // Two's complement of v (makes flags easier)
-                let (sum, overflow) = a.overflowing_add(nv);
+                let sum = a.wrapping_add(nv);
                 self.registers.set_a(sum);
                 self.registers.modify_f(|mut f| {
                     f.set(FRegister::NEGATIVE);
                     f.set_value(FRegister::ZERO, sum == 0);
-                    f.set_value(FRegister::HALFCARRY, (a & 0x0f) + (nv & 0x0f) >= 0x10);
-                    f.set_value(FRegister::CARRY, !overflow);
+                    f.set_value(FRegister::HALFCARRY, (a & 0x0f) < (v & 0x0f));
+                    f.set_value(FRegister::CARRY, v > a);
 
                     f
                 })
             }
             Sbc => {
-                let a = self.registers.get_a();
-                let (sum, overflow1) = a.overflowing_add(v);
-                let (sum, overflow2) =
-                    sum.overflowing_add(if self.registers.get_f().contains(FRegister::CARRY) {
-                        1
-                    } else {
-                        0
-                    });
-                let overflow = overflow1 | overflow2;
-                self.registers.set_a(sum);
+                let a = self.registers.get_a() as u16 as i16;
+                let v = v as u16 as i16;
+                let vc = if self.registers.get_f().contains(FRegister::CARRY) {
+                    v + 1
+                } else {
+                    v
+                };
+                let carry = vc > a;
+                let sum = a - vc;
+                let bytesum = sum as u16 as u8;
+
+                let al = a & 0x0f;
+                let vl = v & 0x0f;
+                let vlc = if self.registers.get_f().contains(FRegister::CARRY) {
+                    vl + 1
+                } else {
+                    vl
+                };
+                let halfcarry = vlc > al;
+                self.registers.set_a(bytesum);
                 self.registers.modify_f(|mut f| {
-                    f.unset(FRegister::NEGATIVE);
-                    f.set_value(FRegister::ZERO, sum == 0);
-                    f.set_value(FRegister::HALFCARRY, (a & 0x0f) + (v & 0x0f) >= 0x10);
-                    f.set_value(FRegister::CARRY, !overflow);
+                    f.set(FRegister::NEGATIVE);
+                    f.set_value(FRegister::ZERO, bytesum == 0);
+                    f.set_value(FRegister::HALFCARRY, halfcarry);
+                    f.set_value(FRegister::CARRY, carry);
 
                     f
                 })
@@ -157,12 +177,12 @@ impl super::Cpu {
             Cp => {
                 let a = self.registers.get_a();
                 let nv = (!v).wrapping_add(1); // Two's complement of v (makes flags easier)
-                let (sum, overflow) = a.overflowing_add(nv);
+                let sum = a.wrapping_add(nv);
                 self.registers.modify_f(|mut f| {
                     f.set(FRegister::NEGATIVE);
                     f.set_value(FRegister::ZERO, sum == 0);
-                    f.set_value(FRegister::HALFCARRY, (a & 0x0f) + (nv & 0x0f) >= 0x10);
-                    f.set_value(FRegister::CARRY, !overflow);
+                    f.set_value(FRegister::HALFCARRY, (a & 0x0f) < (v & 0x0f));
+                    f.set_value(FRegister::CARRY, v > a);
 
                     f
                 })
@@ -658,8 +678,8 @@ fn cpu_runner_gen(
                         let v = read_8_bits!(cpu, dst);
                         let nv = v.wrapping_sub(1); // equiv. to wrapping_add(255)
                         let z = nv == 0;
-                        // a half carry will always happen unless the lower nybble equals 0
-                        let hc = (v & 0xf) != 0x0;
+                        // a half carry will always happen when the lower nybble equals 0
+                        let hc = (v & 0xf) == 0x0;
                         cpu.registers.modify_f(|mut f| {
                             f.set_value(FRegister::ZERO, z);
                             f.set(FRegister::NEGATIVE);
