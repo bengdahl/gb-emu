@@ -1028,7 +1028,7 @@ fn cpu_runner_gen(
                                 1 => {
                                     // BIT
                                     let n = opcode.y();
-                                    let z = v & (1 << n) != 0;
+                                    let z = v & (1 << n) == 0;
                                     cpu.registers.modify_f(|mut f| {
                                         f.set_value(FRegister::ZERO, z);
                                         f.unset(FRegister::NEGATIVE);
