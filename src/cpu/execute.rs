@@ -93,7 +93,7 @@ impl super::Cpu {
                     f.set(FRegister::NEGATIVE);
                     f.set_value(FRegister::ZERO, sum == 0);
                     f.set_value(FRegister::HALFCARRY, (a & 0x0f) + (nv & 0x0f) >= 0x10);
-                    f.set_value(FRegister::CARRY, overflow);
+                    f.set_value(FRegister::CARRY, !overflow);
 
                     f
                 })
@@ -113,7 +113,7 @@ impl super::Cpu {
                     f.unset(FRegister::NEGATIVE);
                     f.set_value(FRegister::ZERO, sum == 0);
                     f.set_value(FRegister::HALFCARRY, (a & 0x0f) + (v & 0x0f) >= 0x10);
-                    f.set_value(FRegister::CARRY, overflow);
+                    f.set_value(FRegister::CARRY, !overflow);
 
                     f
                 })
@@ -162,7 +162,7 @@ impl super::Cpu {
                     f.set(FRegister::NEGATIVE);
                     f.set_value(FRegister::ZERO, sum == 0);
                     f.set_value(FRegister::HALFCARRY, (a & 0x0f) + (nv & 0x0f) >= 0x10);
-                    f.set_value(FRegister::CARRY, overflow);
+                    f.set_value(FRegister::CARRY, !overflow);
 
                     f
                 })
@@ -233,7 +233,8 @@ impl super::Cpu {
                 } else {
                     0
                 };
-                let (nv, c) = v.overflowing_shl(1);
+                let c = (v & 0x80) != 0;
+                let nv = v << 1;
                 let nv = nv | rotate_in;
                 let z = nv == 0;
                 self.registers.modify_f(|mut f| {
@@ -251,7 +252,8 @@ impl super::Cpu {
                 } else {
                     0x00
                 };
-                let (nv, c) = v.overflowing_shr(1);
+                let c = (v & 0x01) != 0;
+                let nv = v >> 1;
                 let nv = nv | rotate_in;
                 let z = nv == 0;
                 self.registers.modify_f(|mut f| {
@@ -264,7 +266,8 @@ impl super::Cpu {
                 nv
             }
             SLA => {
-                let (nv, c) = v.overflowing_shl(1);
+                let c = (v & 0x80) != 0;
+                let nv = v << 1;
                 let z = nv == 0;
                 self.registers.modify_f(|mut f| {
                     f.set_value(FRegister::ZERO, z);
@@ -277,7 +280,8 @@ impl super::Cpu {
             }
             SRA => {
                 let msb = v & 0x80;
-                let (nv, c) = v.overflowing_shr(1);
+                let c = (v & 0x01) != 0;
+                let nv = v >> 1;
                 let nv = nv | msb;
                 let z = nv == 0;
                 self.registers.modify_f(|mut f| {
@@ -305,7 +309,8 @@ impl super::Cpu {
                 nv
             }
             SRL => {
-                let (nv, c) = v.overflowing_shr(1);
+                let c = (v & 0x01) != 0;
+                let nv = v >> 1;
                 let z = nv == 0;
                 self.registers.modify_f(|mut f| {
                     f.set_value(FRegister::ZERO, z);
@@ -440,6 +445,8 @@ fn cpu_runner_gen(
                 if let Some(vector) = interrupt {
                     // Interrupt Service Routine
 
+                    println!("Interrupt {}", vector);
+
                     // Two waits for some reason
                     cpu_yield!(cpu.nop());
                     cpu_yield!(cpu.nop());
@@ -545,11 +552,9 @@ fn cpu_runner_gen(
                         let from = decode::rp(opcode.p());
 
                         let hl = cpu.registers.get_hl();
-                        let l = cpu.registers.get_l();
                         let addend = cpu.read_16_bits(from);
-                        let addend_low = (addend & 0xff) as u8;
 
-                        let half_carry = addend_low.overflowing_add(l).1;
+                        let half_carry = (((hl & 0x0FFF) + (addend & 0x0FFF)) & 0x1000) != 0;
                         let (new_hl, carry) = hl.overflowing_add(addend);
 
                         // This instruction takes an extra cycle
@@ -679,7 +684,7 @@ fn cpu_runner_gen(
                             let na = cpu.do_rotate_shift(a, RotateShiftOperation::RLC);
                             cpu.registers.set_a(na);
                             cpu.registers.modify_f(|mut f| {
-                                f.unset(f);
+                                f.unset(f & !FRegister::CARRY);
                                 f
                             });
                         }
@@ -689,7 +694,7 @@ fn cpu_runner_gen(
                             let na = cpu.do_rotate_shift(a, RotateShiftOperation::RRC);
                             cpu.registers.set_a(na);
                             cpu.registers.modify_f(|mut f| {
-                                f.unset(f);
+                                f.unset(f & !FRegister::CARRY);
                                 f
                             });
                         }
@@ -699,7 +704,7 @@ fn cpu_runner_gen(
                             let na = cpu.do_rotate_shift(a, RotateShiftOperation::RL);
                             cpu.registers.set_a(na);
                             cpu.registers.modify_f(|mut f| {
-                                f.unset(f);
+                                f.unset(f & !FRegister::CARRY);
                                 f
                             });
                         }
@@ -709,7 +714,7 @@ fn cpu_runner_gen(
                             let na = cpu.do_rotate_shift(a, RotateShiftOperation::RR);
                             cpu.registers.set_a(na);
                             cpu.registers.modify_f(|mut f| {
-                                f.unset(f);
+                                f.unset(f & !FRegister::CARRY);
                                 f
                             });
                         }
@@ -805,10 +810,11 @@ fn cpu_runner_gen(
                         5 => {
                             // ADD SP, n
                             cpu_yield!(cpu.fetch_byte());
-                            let n = pins.data;
+                            let n = pins.data as i8 as i16 as u16;
                             let sp = cpu.registers.get_sp();
-                            let (v, carry) = sp.overflowing_add(n as u16);
-                            let halfcarry = (sp & 0xff) + (n as u16) >= 0x100;
+                            let v = sp.wrapping_add(n);
+                            let carry = (sp & 0xff) + (n & 0xff) >= 0x100;
+                            let halfcarry = (sp & 0x0f) + (n & 0x0f) >= 0x10;
                             // Pause
                             cpu_yield!(cpu.nop());
                             cpu.registers.set_sp(v);
@@ -834,10 +840,11 @@ fn cpu_runner_gen(
                         7 => {
                             // LD HL, SP+d
                             cpu_yield!(cpu.fetch_byte());
-                            let n = pins.data;
+                            let n = pins.data as i8 as i16 as u16;
                             let sp = cpu.registers.get_sp();
-                            let (v, carry) = sp.overflowing_add(n as u16);
-                            let halfcarry = (sp & 0xff) + (n as u16) >= 0x100;
+                            let v = sp.wrapping_add(n);
+                            let carry = (sp & 0xff) + (n & 0xff) >= 0x100;
+                            let halfcarry = (sp & 0x0f) + (n & 0x0f) >= 0x10;
                             // Pause
                             cpu_yield!(cpu.nop());
                             cpu.registers.set_hl(v);

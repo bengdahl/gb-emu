@@ -146,6 +146,48 @@ impl MonochromePpuState {
 
         self.stat_irq = mode_int | lyc_int;
     }
+
+    /// Create an image displaying the entire current tile data, width, and height
+    pub fn display_tile_data(&self) -> (Vec<u32>, usize, usize) {
+        const TILE_COUNT: usize = (0x9800 - 0x8000) / 16;
+        const ROW_LENGTH: usize = 16;
+        const TILE_WIDTH: usize = 8;
+        const IMAGE_WIDTH: usize = ROW_LENGTH * TILE_WIDTH;
+        const ROWS: usize = TILE_COUNT / ROW_LENGTH;
+        const IMAGE_HEIGHT: usize = ROWS * TILE_WIDTH;
+
+        let mut image = vec![0; IMAGE_WIDTH * IMAGE_HEIGHT];
+        let bgp = self.bgp;
+
+        for row in 0..ROWS {
+            let basey = TILE_WIDTH * row;
+            for col in 0..ROW_LENGTH {
+                let basex = TILE_WIDTH * col;
+
+                let tile_id = row * ROW_LENGTH + col;
+                for offy in 0..TILE_WIDTH {
+                    let row_lo = self.tile_data[tile_id * 16 + 2 * offy + 0];
+                    let row_hi = self.tile_data[tile_id * 16 + 2 * offy + 1];
+                    for offx in 0..TILE_WIDTH {
+                        let colorbit_lo = (row_lo << offx) >> 7;
+                        let colorbit_hi = (row_hi << offx) >> 7;
+                        let color_id = color::calculate_monochrome_color_id(
+                            bgp,
+                            (colorbit_hi << 1) | colorbit_lo,
+                        );
+                        let color = color::COLORS[color_id];
+
+                        let imgx = basex + offx;
+                        let imgy = basey + offy;
+                        let offset = imgy * IMAGE_WIDTH + imgx;
+                        image[offset] = color;
+                    }
+                }
+            }
+        }
+
+        (image, IMAGE_WIDTH, IMAGE_HEIGHT)
+    }
 }
 
 fn ppu_gen() -> impl std::ops::Generator<

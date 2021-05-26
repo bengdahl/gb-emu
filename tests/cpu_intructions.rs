@@ -292,11 +292,11 @@ fn sub() {
             .map(|(cpu, d)| (cpu.registers.get_f(), d))
             .collect::<Vec<_>>(),
         vec![
-            (FRegister::NEGATIVE | FRegister::CARRY, 5),
-            (FRegister::NEGATIVE, 0xFF),
-            (FRegister::NEGATIVE | FRegister::CARRY, 15),
+            (FRegister::NEGATIVE, 5),
+            (FRegister::NEGATIVE | FRegister::CARRY, 0xFF),
+            (FRegister::NEGATIVE, 15),
             (
-                FRegister::NEGATIVE | FRegister::ZERO | FRegister::CARRY | FRegister::HALFCARRY,
+                FRegister::NEGATIVE | FRegister::ZERO | FRegister::HALFCARRY,
                 0
             ),
         ]

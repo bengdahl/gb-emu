@@ -9,11 +9,11 @@ use ppu::PPU;
 use self::{cart::Cart, models::DMG};
 
 pub struct Gameboy<Model: models::GbModel> {
-    cpu: CpuRunner,
-    ppu: Model::PPU,
+    pub cpu: CpuRunner,
+    pub ppu: Model::PPU,
     cpu_input: CpuInputPins,
     memory: Memory,
-    cart: cart::Cart,
+    pub cart: cart::Cart,
 }
 
 pub mod models {
@@ -59,16 +59,18 @@ impl<Model: models::GbModel> Gameboy<Model> {
         let cpu_out = self.cpu.clock(self.cpu_input);
 
         // remove later
-        // static mut BREAKPOINT_HIT: bool = false;
-        // let addr = match cpu_out {
-        //     CpuOutputPins::Write { addr, .. } => addr,
-        //     CpuOutputPins::Read { addr } => addr,
-        // };
+        // static mut BREAKPOINT_INSTR: bool = false;
+        // static mut BREAKPOINT_E8: bool = false;
         // unsafe {
-        //     if addr == 0x63b {
-        //         BREAKPOINT_HIT = true;
+        //     if let CpuOutputPins::Read { addr: 0xc60a } = cpu_out {
+        //         BREAKPOINT_E8 = true;
         //     }
-        //     if BREAKPOINT_HIT {
+        //     if let CpuOutputPins::Read { addr: 0xdef8 } = cpu_out {
+        //         if BREAKPOINT_E8 {
+        //             BREAKPOINT_INSTR = true;
+        //         }
+        //     }
+        //     if BREAKPOINT_INSTR && BREAKPOINT_E8 {
         //         println!("{:?}", self.cpu.cpu);
         //     }
         // }

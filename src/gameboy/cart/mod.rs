@@ -39,6 +39,6 @@ fn mapper_from_id(id: u8, data: Vec<u8>) -> Box<dyn Mapper + Send> {
         1 => Box::new(Mbc1::new(data)),
         2 => Box::new(Mbc1WithRam::new(data)),
         3 => Box::new(Mbc1WithBatteryRam::new(data)),
-        _ => panic!("Mapper unimplemented: {:02X}", id),
+        _ => panic!("Mapper unimplemented: {:#02X}", id),
     }
 }
