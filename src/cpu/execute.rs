@@ -195,19 +195,19 @@ impl super::Cpu {
         let mut a = self.registers.get_a();
 
         if !f.contains(FRegister::NEGATIVE) {
-            if f.contains(FRegister::HALFCARRY) || (a & 0x0F) > 0x09 {
-                a = a.wrapping_add(0x06);
-            }
             if f.contains(FRegister::CARRY) || a > 0x99 {
                 a = a.wrapping_add(0x60);
                 f.set(FRegister::CARRY);
             }
-        } else {
-            if f.contains(FRegister::HALFCARRY) {
-                a = a.wrapping_sub(0x06);
+            if f.contains(FRegister::HALFCARRY) || (a & 0x0F) > 0x09 {
+                a = a.wrapping_add(0x06);
             }
+        } else {
             if f.contains(FRegister::CARRY) {
                 a = a.wrapping_sub(0x60);
+            }
+            if f.contains(FRegister::HALFCARRY) {
+                a = a.wrapping_sub(0x06);
             }
         }
 
