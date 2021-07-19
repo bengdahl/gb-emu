@@ -1,14 +1,2 @@
-[package]
-name = "gb_core"
-version = "0.1.0"
-authors = ["Ben Engdahl <bengdahl341@gmail.com>"]
-edition = "2018"
-
 [workspace]
-members = ["gb_iced"]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-paste = "1.0.4"
-bitflags = "1.2"
+members = ["gb_iced", "gb_core"]

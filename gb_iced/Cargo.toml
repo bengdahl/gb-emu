@@ -6,7 +6,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-gb_core = { path = ".." }
+gb_core = { path = "../gb_core" }
 iced = { version = "0.3", features = ["image", "smol"] }
 iced_futures = "*"
 
