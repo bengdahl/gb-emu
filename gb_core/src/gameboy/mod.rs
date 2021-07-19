@@ -67,26 +67,6 @@ impl<Model: models::GbModel> Gameboy<Model> {
     pub fn clock(&mut self) {
         let cpu_out = self.cpu.clock(self.cpu_input);
 
-        // remove later
-        // static mut BREAKPOINT_INSTR: bool = false;
-        // static mut BREAKPOINT_E8: bool = false;
-        // unsafe {
-        //     if let CpuOutputPins::Read { addr: 0xc60a } = cpu_out {
-        //         BREAKPOINT_E8 = true;
-        //     }
-        //     if let CpuOutputPins::Read { addr: 0xdef8 } = cpu_out {
-        //         if BREAKPOINT_E8 {
-        //             BREAKPOINT_INSTR = true;
-        //         }
-        //     }
-        //     if BREAKPOINT_INSTR && BREAKPOINT_E8 {
-        //         println!("{:?}", self.cpu.cpu);
-        //     }
-        // }
-        if let CpuOutputPins::Write { addr: 0xff01, data } = cpu_out {
-            print!("{}", data as char)
-        }
-
         let chips: &mut [&mut dyn Chip] = &mut [
             &mut self.ppu,
             &mut self.memory,
