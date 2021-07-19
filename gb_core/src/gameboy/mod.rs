@@ -1,6 +1,7 @@
 pub mod cart;
 pub mod memory;
 pub mod ppu;
+pub mod timer;
 
 use crate::cpu::{CpuInputPins, CpuOutputPins, CpuRunner};
 use memory::Memory;
@@ -14,6 +15,7 @@ pub struct Gameboy<Model: models::GbModel> {
     cpu_input: CpuInputPins,
     memory: Memory,
     pub cart: cart::Cart,
+    timer: timer::Timer,
 
     interrupt_enable: u8,
     interrupt_request: u8,
@@ -46,6 +48,7 @@ impl Gameboy<DMG> {
             cpu_input: CpuInputPins::default(),
             memory: Memory::new(),
             cart: Cart::new(rom)?,
+            timer: timer::Timer::default(),
 
             interrupt_enable: 0,
             interrupt_request: 0,
@@ -84,7 +87,12 @@ impl<Model: models::GbModel> Gameboy<Model> {
             print!("{}", data as char)
         }
 
-        let chips: &mut [&mut dyn Chip] = &mut [&mut self.ppu, &mut self.memory, &mut self.cart];
+        let chips: &mut [&mut dyn Chip] = &mut [
+            &mut self.ppu,
+            &mut self.memory,
+            &mut self.cart,
+            &mut self.timer,
+        ];
 
         let bus_output = {
             let mut data = 0xFF;
@@ -94,6 +102,7 @@ impl<Model: models::GbModel> Gameboy<Model> {
                 chip.clock(cpu_out, &mut data, &mut ir);
             }
 
+            self.interrupt_request = ir;
             data
         };
 

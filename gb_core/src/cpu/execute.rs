@@ -397,6 +397,7 @@ fn cpu_runner_gen(
     #[allow(unused_assignments)]
     move |t: (super::Cpu, CpuInputPins)| {
         let (mut cpu, mut pins) = t;
+        let mut halted = false;
         loop {
             macro_rules! cpu_yield {
                 ($yielded:expr) => {
@@ -447,26 +448,25 @@ fn cpu_runner_gen(
             }
 
             // Handle interrupts
-            if cpu.ime {
-                let interrupt = if pins.interrupt_40h {
-                    Some(0x40)
-                } else if pins.interrupt_48h {
-                    Some(0x48)
-                } else if pins.interrupt_50h {
-                    Some(0x50)
-                } else if pins.interrupt_58h {
-                    Some(0x58)
-                } else if pins.interrupt_60h {
-                    Some(0x60)
-                } else {
-                    None
-                };
+            let interrupt = if pins.interrupt_40h {
+                Some(0x40)
+            } else if pins.interrupt_48h {
+                Some(0x48)
+            } else if pins.interrupt_50h {
+                Some(0x50)
+            } else if pins.interrupt_58h {
+                Some(0x58)
+            } else if pins.interrupt_60h {
+                Some(0x60)
+            } else {
+                None
+            };
 
-                if let Some(vector) = interrupt {
+            if let Some(vector) = interrupt {
+                halted = false;
+                if cpu.ime {
                     // Interrupt Service Routine (5 clock cycles)
                     // https://gbdev.io/pandocs/Interrupts.html#interrupt-handling
-
-                    println!("Interrupt {}", vector);
 
                     // Normally, these two cycles would both be NOPs, but in this architecture we
                     // have to take advantage of these cycles to reset the IF flag.
@@ -491,6 +491,12 @@ fn cpu_runner_gen(
 
                     cpu_yield!(cpu.nop());
                 }
+            }
+
+            // If the CPU is halted, stop processing instructions, and wait for an interrupt to wake up the CPU.
+            if halted {
+                cpu_yield!(cpu.nop());
+                continue;
             }
 
             // Fetch
@@ -781,7 +787,11 @@ fn cpu_runner_gen(
                     },
                     _ => unreachable!(),
                 },
-                1 if opcode.z() == 6 && opcode.y() == 6 => todo!("HLT"),
+                1 if opcode.z() == 6 && opcode.y() == 6 => {
+                    // HLT
+                    halted = true;
+                    continue;
+                }
                 1 => {
                     // 8-bit register-to-register LD
                     let dst = decode::r(opcode.y());
