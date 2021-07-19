@@ -1,4 +1,3 @@
-mod screen;
 use iced::{Application, Color, Element, Length};
 
 struct App {

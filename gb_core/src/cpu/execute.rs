@@ -531,8 +531,11 @@ fn cpu_runner_gen(
                             cpu_yield!(cpu.write_byte(addr + 1, sp_hi));
                             continue;
                         }
-                        2 => continue,
-                        // 2 => todo!("STOP"),
+                        2 => {
+                            // STOP
+                            // STOP is too wierd. just alias it to HALT for now
+                            halted = true;
+                        }
                         3 => {
                             // JR d
                             cpu_yield!(cpu.fetch_byte());
@@ -788,7 +791,7 @@ fn cpu_runner_gen(
                     _ => unreachable!(),
                 },
                 1 if opcode.z() == 6 && opcode.y() == 6 => {
-                    // HLT
+                    // HALT
                     halted = true;
                     continue;
                 }
