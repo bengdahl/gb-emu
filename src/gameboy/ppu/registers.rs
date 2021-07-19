@@ -41,6 +41,7 @@ impl STAT {
 
     #[inline]
     pub fn set_mode(&mut self, mode: Self) {
+        use std::assert_matches::assert_matches;
         assert_matches!(
             mode,
             STAT::MODE_0 | STAT::MODE_1 | STAT::MODE_2 | STAT::MODE_3
