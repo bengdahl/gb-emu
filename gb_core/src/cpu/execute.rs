@@ -463,18 +463,23 @@ fn cpu_runner_gen(
                 };
 
                 if let Some(vector) = interrupt {
-                    // Interrupt Service Routine
+                    // Interrupt Service Routine (5 clock cycles)
+                    // https://gbdev.io/pandocs/Interrupts.html#interrupt-handling
 
                     println!("Interrupt {}", vector);
 
-                    // Two waits for some reason
-                    cpu_yield!(cpu.nop());
-                    cpu_yield!(cpu.nop());
+                    // Normally, these two cycles would both be NOPs, but in this architecture we
+                    // have to take advantage of these cycles to reset the IF flag.
+                    cpu_yield!(cpu.read_byte(0xFF0F));
+                    let interrupt_flag = pins.data;
+                    let if_mask = !(1 << ((vector - 0x40) / 8));
+                    cpu_yield!(cpu.write_byte(0xFF0F, interrupt_flag & if_mask));
 
                     let pc = cpu.registers.get_pc();
                     let pc_lo = (pc & 0xFF) as u8;
                     let pc_hi = (pc >> 8) as u8;
 
+                    // Push PC onto the stack
                     cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
                     cpu_yield!(cpu.write_byte(cpu.registers.get_sp(), pc_hi));
                     cpu.registers.modify_sp(|sp| sp.wrapping_sub(1));
@@ -484,7 +489,6 @@ fn cpu_runner_gen(
 
                     cpu.ime = false;
 
-                    // One more for good measure
                     cpu_yield!(cpu.nop());
                 }
             }

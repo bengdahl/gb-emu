@@ -1,7 +1,4 @@
-use crate::{
-    cpu::{CpuInputPins, CpuOutputPins},
-    gameboy::Chip,
-};
+use crate::{cpu::CpuOutputPins, gameboy::Chip};
 
 use super::Mapper;
 
@@ -75,31 +72,20 @@ impl<R: ram::Ram> Mbc1Generic<R> {
 }
 
 impl<R: ram::Ram> Chip for Mbc1Generic<R> {
-    fn chip_select(&self, addr: u16) -> bool {
-        matches!(addr, 0x0000..=0x7FFF | 0xA000..=0xBFFF)
-    }
-
-    fn clock_unselected(&mut self) {}
-    fn clock(&mut self, input: CpuOutputPins) -> CpuInputPins {
+    fn clock(&mut self, input: CpuOutputPins, data: &mut u8, _interrupt_request: &mut u8) {
         match input {
             CpuOutputPins::Read { addr } => match addr {
-                0x0000..=0x3FFF => CpuInputPins {
-                    data: self.bank_0()[addr as usize],
-                    ..Default::default()
-                },
-                0x4000..=0x7FFF => CpuInputPins {
-                    data: self.bank_1()[(addr - 0x4000) as usize],
-                    ..Default::default()
-                },
-                0xA000..=0xBFFF => CpuInputPins {
-                    data: if self.ram_enable {
+                0x0000..=0x3FFF => *data = self.bank_0()[addr as usize],
+                0x4000..=0x7FFF => *data = self.bank_1()[(addr - 0x4000) as usize],
+
+                0xA000..=0xBFFF => {
+                    *data = if self.ram_enable {
                         self.ram[addr - 0xA000]
                     } else {
                         0
-                    },
-                    ..Default::default()
-                },
-                0x8000..=0x9FFF | 0xC000..=0xFFFF => panic!(),
+                    }
+                }
+                0x8000..=0x9FFF | 0xC000..=0xFFFF => (),
             },
             CpuOutputPins::Write { addr, data } => {
                 match addr {
@@ -118,7 +104,7 @@ impl<R: ram::Ram> Chip for Mbc1Generic<R> {
                             self.ram[addr - 0xA000] = data
                         }
                     }
-                    0x8000..=0x9FFF | 0xC000..=0xFFFF => panic!(),
+                    0x8000..=0x9FFF | 0xC000..=0xFFFF => (),
                 };
                 Default::default()
             }

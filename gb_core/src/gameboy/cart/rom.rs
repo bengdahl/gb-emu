@@ -14,18 +14,13 @@ impl Rom {
 }
 
 impl Chip for Rom {
-    fn clock_unselected(&mut self) {}
-    fn clock(&mut self, input: CpuOutputPins) -> CpuInputPins {
-        match input {
-            CpuOutputPins::Read { addr } => CpuInputPins {
-                data: self.data[addr as usize],
-                ..Default::default()
-            },
-            CpuOutputPins::Write { .. } => CpuInputPins::default(),
+    fn clock(&mut self, input: CpuOutputPins, data: &mut u8, _interrupt_request: &mut u8) {
+        if let CpuOutputPins::Read {
+            addr: addr @ (0x0000..=0x7FFF),
+        } = input
+        {
+            *data = self.data[addr as usize]
         }
-    }
-    fn chip_select(&self, addr: u16) -> bool {
-        matches!(addr, 0x0000..=0x7FFF)
     }
 }
 impl Mapper for Rom {}

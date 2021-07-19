@@ -1,6 +1,6 @@
 //! An implementation of the Gameboy monochrome PPU
 
-use crate::cpu::{CpuInputPins, CpuOutputPins};
+use crate::cpu::CpuOutputPins;
 
 use super::{registers::*, PPU};
 use std::{cell::RefCell, fmt::Debug, ops::GeneratorState, rc::Rc};
@@ -293,66 +293,71 @@ impl PPU for MonochromePpu {
     type Frame = Frame;
 
     #[inline]
-    fn perform_io(&mut self, input: CpuOutputPins) -> CpuInputPins {
+    fn perform_io(&mut self, input: CpuOutputPins, data: &mut u8, interrupt_request: &mut u8) {
         let mut state = self.state.borrow_mut();
-        let data = match input {
-            CpuOutputPins::Write { addr, data: v } => {
-                match addr {
-                    0x8000..=0x97FF => state.tile_data[addr as usize - 0x8000] = v,
-                    0x9800..=0x9BFF => state.bg_map_1[addr as usize - 0x9800] = v,
-                    0x9C00..=0x9FFF => state.bg_map_1[addr as usize - 0x9C00] = v,
+        match input {
+            CpuOutputPins::Write { addr, data: v } => match addr {
+                0x8000..=0x97FF => state.tile_data[addr as usize - 0x8000] = v,
+                0x9800..=0x9BFF => state.bg_map_1[addr as usize - 0x9800] = v,
+                0x9C00..=0x9FFF => state.bg_map_1[addr as usize - 0x9C00] = v,
 
-                    0xFE00..=0xFE9F => state.oam[addr as usize - 0xFE00] = v,
+                0xFE00..=0xFE9F => state.oam[addr as usize - 0xFE00] = v,
 
-                    0xFF40 => state.lcdc = LCDC::from_bits_truncate(v),
-                    0xFF41 => {
-                        state.stat = STAT::from_bits_truncate(v);
-                        state.update_stat_interrupt();
-                    }
-                    0xFF42 => state.scy = v,
-                    0xFF43 => state.scx = v,
-                    0xFF44 => state.ly = v,
-                    0xFF45 => state.lyc = v,
-                    0xFF46 => (),
-                    0xFF47 => state.bgp = v,
-                    0xFF48 => state.obp0 = v,
-                    0xFF49 => state.obp1 = v,
-                    0xFF4A => state.wy = v,
-                    0xFF4B => state.wx = v,
-                    _ => panic!("{:?}", input),
+                0xFF40 => state.lcdc = LCDC::from_bits_truncate(v),
+                0xFF41 => {
+                    state.stat = STAT::from_bits_truncate(v);
+                    state.update_stat_interrupt();
                 }
-                0
-            }
+                0xFF42 => state.scy = v,
+                0xFF43 => state.scx = v,
+                0xFF44 => state.ly = v,
+                0xFF45 => state.lyc = v,
+                0xFF46 => (),
+                0xFF47 => state.bgp = v,
+                0xFF48 => state.obp0 = v,
+                0xFF49 => state.obp1 = v,
+                0xFF4A => state.wy = v,
+                0xFF4B => state.wx = v,
+                _ => (),
+            },
             CpuOutputPins::Read { addr } => match addr {
-                0x8000..=0x97FF => state.tile_data[addr as usize - 0x8000],
-                0x9800..=0x9BFF => state.bg_map_1[addr as usize - 0x9800],
-                0x9C00..=0x9FFF => state.bg_map_1[addr as usize - 0x9C00],
+                0x8000..=0x97FF => *data = state.tile_data[addr as usize - 0x8000],
+                0x9800..=0x9BFF => *data = state.bg_map_1[addr as usize - 0x9800],
+                0x9C00..=0x9FFF => *data = state.bg_map_1[addr as usize - 0x9C00],
 
-                0xFE00..=0xFE9F => state.oam[addr as usize - 0xFE00],
+                0xFE00..=0xFE9F => *data = state.oam[addr as usize - 0xFE00],
 
-                0xFF40 => state.lcdc.bits(),
-                0xFF41 => state.stat.bits(),
-                0xFF42 => state.scy,
-                0xFF43 => state.scx,
-                0xFF44 => state.ly,
-                0xFF45 => state.lyc,
-                0xFF46 => 0,
-                0xFF47 => state.bgp,
-                0xFF48 => state.obp0,
-                0xFF49 => state.obp1,
-                0xFF4A => state.wy,
-                0xFF4B => state.wx,
+                0xFF40 => *data = state.lcdc.bits(),
+                0xFF41 => *data = state.stat.bits(),
+                0xFF42 => *data = state.scy,
+                0xFF43 => *data = state.scx,
+                0xFF44 => *data = state.ly,
+                0xFF45 => *data = state.lyc,
+                0xFF46 => *data = 0,
+                0xFF47 => *data = state.bgp,
+                0xFF48 => *data = state.obp0,
+                0xFF49 => *data = state.obp1,
+                0xFF4A => *data = state.wy,
+                0xFF4B => *data = state.wx,
 
-                _ => panic!("{:?}", input),
+                _ => (),
             },
         };
 
-        CpuInputPins {
-            data,
-            interrupt_40h: state.vblank_irq,
-            interrupt_48h: state.stat_irq,
-            ..Default::default()
+        let mut irq = *interrupt_request;
+        if state.vblank_irq {
+            irq |= 1 << 0;
+        } else {
+            irq &= !(1 << 0);
         }
+
+        if state.stat_irq {
+            irq |= 1 << 1;
+        } else {
+            irq &= !(1 << 1);
+        }
+
+        *interrupt_request = irq;
     }
 
     fn clock_t_state(&mut self) {

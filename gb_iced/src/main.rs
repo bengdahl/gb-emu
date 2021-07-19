@@ -50,15 +50,11 @@ impl Application for App {
             .push(iced::Image::new(iced::image::Handle::from_pixels(
                 160, 144, frame,
             )))
-            .push(
-                iced::Image::new(iced::image::Handle::from_pixels(
-                    tilew as u32,
-                    tileh as u32,
-                    u32_to_bgra(tile_data),
-                ))
-                .width(Length::Units(tilew as u16 * 2))
-                .height(Length::Units(tileh as u16 * 2)),
-            )
+            .push(iced::Image::new(iced::image::Handle::from_pixels(
+                tilew as u32,
+                tileh as u32,
+                u32_to_bgra(tile_data),
+            )))
             .into()
     }
 

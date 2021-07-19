@@ -2,7 +2,7 @@ mod mbc1;
 mod rom;
 
 use super::Chip;
-use crate::cpu::{CpuInputPins, CpuOutputPins};
+use crate::cpu::CpuOutputPins;
 use mbc1::{Mbc1, Mbc1WithBatteryRam, Mbc1WithRam};
 
 trait Mapper: Chip {}
@@ -12,16 +12,8 @@ pub struct Cart {
 }
 
 impl Chip for Cart {
-    fn clock(&mut self, input: CpuOutputPins) -> CpuInputPins {
-        self.mapper.clock(input)
-    }
-
-    fn clock_unselected(&mut self) {
-        self.mapper.clock_unselected()
-    }
-
-    fn chip_select(&self, addr: u16) -> bool {
-        self.mapper.chip_select(addr)
+    fn clock(&mut self, input: CpuOutputPins, data: &mut u8, interrupt_request: &mut u8) {
+        self.mapper.clock(input, data, interrupt_request)
     }
 }
 

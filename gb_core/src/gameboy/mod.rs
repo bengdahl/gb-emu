@@ -14,6 +14,9 @@ pub struct Gameboy<Model: models::GbModel> {
     cpu_input: CpuInputPins,
     memory: Memory,
     pub cart: cart::Cart,
+
+    interrupt_enable: u8,
+    interrupt_request: u8,
 }
 
 pub mod models {
@@ -43,6 +46,9 @@ impl Gameboy<DMG> {
             cpu_input: CpuInputPins::default(),
             memory: Memory::new(),
             cart: Cart::new(rom)?,
+
+            interrupt_enable: 0,
+            interrupt_request: 0,
         })
     }
 
@@ -80,26 +86,38 @@ impl<Model: models::GbModel> Gameboy<Model> {
 
         let chips: &mut [&mut dyn Chip] = &mut [&mut self.ppu, &mut self.memory, &mut self.cart];
 
-        self.cpu_input = {
-            let mut chip_outputs = chips.iter_mut().filter_map(|chip| {
-                if chip.chip_select(cpu_out.addr()) {
-                    Some(chip.clock(cpu_out))
-                } else {
-                    chip.clock_unselected();
-                    None
-                }
-            });
-            let cpu_input = chip_outputs.next();
-            if !chip_outputs.next().is_none() {
-                println!("bus conflict: {:?}", self.cpu_input);
+        let bus_output = {
+            let mut data = 0xFF;
+            let mut ir = self.interrupt_request;
+
+            for chip in chips {
+                chip.clock(cpu_out, &mut data, &mut ir);
             }
-            match cpu_input {
-                Some(c) => c,
-                None => {
-                    // println!("empty bus: {:X?}", cpu_out);
-                    CpuInputPins::default()
-                }
-            }
+
+            data
+        };
+
+        // Handle changes to IE & IF (handled independently from chips)
+        match cpu_out {
+            CpuOutputPins::Write { addr: 0xFF0F, data } => self.interrupt_request = data & 0x1F,
+            CpuOutputPins::Write { addr: 0xFFFF, data } => self.interrupt_enable = data & 0x1F,
+            _ => (),
+        };
+
+        let interrupt_requests = self.interrupt_enable & self.interrupt_request;
+        self.cpu_input = CpuInputPins {
+            interrupt_40h: interrupt_requests & (1 << 0) != 0,
+            interrupt_48h: interrupt_requests & (1 << 1) != 0,
+            interrupt_50h: interrupt_requests & (1 << 2) != 0,
+            interrupt_58h: interrupt_requests & (1 << 3) != 0,
+            interrupt_60h: interrupt_requests & (1 << 4) != 0,
+
+            // IE & IF are not part of any chip, so they must be handled separately
+            data: match cpu_out {
+                CpuOutputPins::Read { addr: 0xFF0F } => self.interrupt_request,
+                CpuOutputPins::Read { addr: 0xFFFF } => self.interrupt_enable,
+                _ => bus_output,
+            },
         }
     }
 }
@@ -115,10 +133,8 @@ impl Gameboy<DMG> {
     }
 }
 
-pub trait Chip {
-    fn chip_select(&self, addr: u16) -> bool;
+/// Using this trait makes it easy to clock every chip on the Gameboy independently
+trait Chip {
     /// Clock by one M-cycle
-    fn clock(&mut self, input: CpuOutputPins) -> CpuInputPins;
-    /// Clock by one M-cycle with the chip unselected (addr is not in this chip's range)
-    fn clock_unselected(&mut self);
+    fn clock(&mut self, input: CpuOutputPins, data: &mut u8, interrupt_request: &mut u8);
 }
