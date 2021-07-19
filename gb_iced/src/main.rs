@@ -51,9 +51,11 @@ impl Application for App {
         let (tile_data, tilew, tileh) = self.gameboy.ppu.state.borrow().display_tile_data();
         iced::Row::new()
             // .push(iced::Text::new("Hello, world!"))
-            .push(iced::Image::new(iced::image::Handle::from_pixels(
-                160, 144, frame,
-            )))
+            .push(
+                iced::Image::new(iced::image::Handle::from_pixels(160, 144, frame))
+                    .height(Length::Units(144 * 2))
+                    .width(Length::Units(160 * 2)),
+            )
             .push(iced::Image::new(iced::image::Handle::from_pixels(
                 tilew as u32,
                 tileh as u32,
