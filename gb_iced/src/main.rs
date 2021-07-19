@@ -1,4 +1,6 @@
-use iced::{Application, Color, Element, Length};
+use std::path::PathBuf;
+
+use iced::{Application, Color, Element, Length, Settings};
 
 struct App {
     gameboy: gb_core::gameboy::Gameboy<gb_core::gameboy::models::DMG>,
@@ -6,14 +8,17 @@ struct App {
 
 impl Application for App {
     type Executor = iced::executor::Default;
-    type Flags = ();
+    type Flags = PathBuf;
     type Message = ();
 
-    fn new(_flags: ()) -> (Self, iced::Command<()>) {
-        static BLARGG_TEST_ROM: &[u8] = include_bytes!("cpu_instrs.gb");
+    fn new(rom_path: PathBuf) -> (Self, iced::Command<()>) {
+        use std::io::Read;
+        let mut rom = std::fs::File::open(rom_path).unwrap();
+        let mut buf = vec![];
+        rom.read_to_end(&mut buf).unwrap();
 
         let mut app = App {
-            gameboy: gb_core::gameboy::Gameboy::new(Vec::from(BLARGG_TEST_ROM)).unwrap(),
+            gameboy: gb_core::gameboy::Gameboy::new(buf).unwrap(),
         };
         app.gameboy.reset();
 
@@ -67,7 +72,10 @@ impl Application for App {
 }
 
 fn main() {
-    let mut settings = iced::Settings::default();
+    let mut settings = Settings {
+        flags: std::env::args().nth(1).expect("Expected 1 argument").into(),
+        ..Default::default()
+    };
     settings.window.min_size = Some((160, 144));
     App::run(settings).unwrap();
 }
