@@ -972,7 +972,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "gb"
+name = "gb_core"
+version = "0.1.0"
+dependencies = [
+ "bitflags",
+ "paste",
+]
+
+[[package]]
+name = "gb_iced"
 version = "0.1.0"
 dependencies = [
  "gb_core",
@@ -981,14 +989,6 @@ dependencies = [
  "iced_graphics",
  "iced_native",
  "iced_web",
-]
-
-[[package]]
-name = "gb_core"
-version = "0.1.0"
-dependencies = [
- "bitflags",
- "paste",
 ]
 
 [[package]]
