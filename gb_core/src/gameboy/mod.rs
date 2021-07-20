@@ -12,11 +12,11 @@ use self::{cart::Cart, models::DMG};
 pub struct Gameboy<Model: models::GbModel> {
     pub cpu: CpuRunner,
     pub ppu: Model::PPU,
-    cpu_input: CpuInputPins,
-    memory: Memory,
+    pub memory: Memory,
     pub cart: cart::Cart,
     timer: timer::Timer,
 
+    cpu_input: CpuInputPins,
     interrupt_enable: u8,
     interrupt_request: u8,
 }
@@ -111,14 +111,35 @@ impl<Model: models::GbModel> Gameboy<Model> {
     }
 }
 impl Gameboy<DMG> {
-    pub fn get_frame(&self) -> Vec<u8> {
+    /// Fetches a frame from the PPU, scales it, and returns it with its wdth and height
+    pub fn get_frame(&self, scale: impl Into<Option<usize>>) -> (Vec<u32>, usize, usize) {
+        let scale = scale.into().unwrap_or(1);
         let frame = self.ppu.get_frame();
-        frame
-            .pixels
-            .iter()
-            .copied()
-            .flat_map(|p| p.to_le_bytes())
-            .collect()
+        let width = frame.width * scale;
+        let height = frame.height * scale;
+        let frame = {
+            let mut new_frame = vec![0; width * height];
+
+            frame
+                .pixels
+                .chunks_exact(frame.width)
+                .enumerate()
+                .for_each(|(y, row)| {
+                    let row_offset = y * scale;
+                    for yoff in row_offset..row_offset + scale {
+                        for (x, pixel) in row.iter().enumerate() {
+                            let pix_offset = x * scale;
+                            for xoff in pix_offset..pix_offset + scale {
+                                new_frame[yoff * width + xoff] = *pixel;
+                            }
+                        }
+                    }
+                });
+
+            new_frame
+        };
+
+        (frame, width, height)
     }
 }
 

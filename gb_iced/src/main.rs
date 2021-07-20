@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use iced::{Application, Color, Element, Length, Settings};
+use iced::{window, Application, Color, Element, Length, Settings};
 
 struct App {
     gameboy: gb_core::gameboy::Gameboy<gb_core::gameboy::models::DMG>,
@@ -47,14 +47,18 @@ impl Application for App {
     }
 
     fn view(&mut self) -> Element<'_, Self::Message> {
-        let frame = self.gameboy.get_frame();
-        let (tile_data, tilew, tileh) = self.gameboy.ppu.state.borrow().display_tile_data();
+        let (frame, framew, frameh) = self.gameboy.get_frame(2);
+        let (tile_data, tilew, tileh) = self.gameboy.ppu.state.borrow().display_tile_data(2);
         iced::Row::new()
             // .push(iced::Text::new("Hello, world!"))
             .push(
-                iced::Image::new(iced::image::Handle::from_pixels(160, 144, frame))
-                    .height(Length::Units(144 * 2))
-                    .width(Length::Units(160 * 2)),
+                iced::Image::new(iced::image::Handle::from_pixels(
+                    framew as u32,
+                    frameh as u32,
+                    u32_to_bgra(frame),
+                ))
+                .height(Length::Units(144 * 2))
+                .width(Length::Units(160 * 2)),
             )
             .push(iced::Image::new(iced::image::Handle::from_pixels(
                 tilew as u32,
@@ -76,6 +80,10 @@ impl Application for App {
 fn main() {
     let mut settings = Settings {
         flags: std::env::args().nth(1).expect("Expected 1 argument").into(),
+        window: window::Settings {
+            size: (160 * 2, 144 * 2),
+            ..Default::default()
+        },
         ..Default::default()
     };
     settings.window.min_size = Some((160, 144));
