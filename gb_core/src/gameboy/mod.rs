@@ -1,4 +1,5 @@
 pub mod cart;
+pub mod joypad;
 pub mod memory;
 pub mod ppu;
 pub mod timer;
@@ -15,6 +16,7 @@ pub struct Gameboy<Model: models::GbModel> {
     pub memory: Memory,
     pub cart: cart::Cart,
     timer: timer::Timer,
+    pub joypad: joypad::Joypad,
 
     cpu_input: CpuInputPins,
     interrupt_enable: u8,
@@ -49,6 +51,7 @@ impl Gameboy<DMG> {
             memory: Memory::new(),
             cart: Cart::new(rom)?,
             timer: timer::Timer::default(),
+            joypad: joypad::Joypad::default(),
 
             interrupt_enable: 0,
             interrupt_request: 0,
@@ -72,6 +75,7 @@ impl<Model: models::GbModel> Gameboy<Model> {
             &mut self.memory,
             &mut self.cart,
             &mut self.timer,
+            &mut self.joypad,
         ];
 
         let bus_output = {
