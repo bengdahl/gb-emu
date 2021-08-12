@@ -231,11 +231,11 @@ fn ppu_gen() -> impl std::ops::Generator<
                 let (bg_fifo_lo, bg_fifo_hi) = {
                     let ppu = ppu.borrow();
                     let tilemap = if ppu.lcdc.contains(LCDC::BG_TILEMAP_AREA) {
-                        ppu.bg_map_2
+                        &ppu.bg_map_2
                     } else {
-                        ppu.bg_map_1
+                        &ppu.bg_map_1
                     };
-                    let tile_data = ppu.tile_data;
+                    let tile_data = &ppu.tile_data;
 
                     let fetcher_x = ((ppu.scx / 8) + screen_tile_x) & 0x1F;
                     let fetcher_y = ppu.scy.wrapping_add(line) / 8;
@@ -306,7 +306,7 @@ impl PPU for MonochromePpu {
             CpuOutputPins::Write { addr, data: v } => match addr {
                 0x8000..=0x97FF => state.tile_data[addr as usize - 0x8000] = v,
                 0x9800..=0x9BFF => state.bg_map_1[addr as usize - 0x9800] = v,
-                0x9C00..=0x9FFF => state.bg_map_1[addr as usize - 0x9C00] = v,
+                0x9C00..=0x9FFF => state.bg_map_2[addr as usize - 0x9C00] = v,
 
                 0xFE00..=0xFE9F => state.oam[addr as usize - 0xFE00] = v,
 
@@ -330,7 +330,7 @@ impl PPU for MonochromePpu {
             CpuOutputPins::Read { addr } => match addr {
                 0x8000..=0x97FF => *data = state.tile_data[addr as usize - 0x8000],
                 0x9800..=0x9BFF => *data = state.bg_map_1[addr as usize - 0x9800],
-                0x9C00..=0x9FFF => *data = state.bg_map_1[addr as usize - 0x9C00],
+                0x9C00..=0x9FFF => *data = state.bg_map_2[addr as usize - 0x9C00],
 
                 0xFE00..=0xFE9F => *data = state.oam[addr as usize - 0xFE00],
 
