@@ -4,7 +4,7 @@ pub mod memory;
 pub mod ppu;
 pub mod timer;
 
-use crate::cpu::{CpuInputPins, CpuOutputPins, CpuRunner};
+use crate::cpu::{CpuInputPins, CpuOutputPins, CpuRunner, CpuRunnerYield};
 use memory::Memory;
 use ppu::PPU;
 
@@ -65,10 +65,18 @@ impl Gameboy<DMG> {
     }
 }
 
+/// Contains information about a clock cycle for use by debugging methods
+pub struct ClockDebug {
+    is_fetch_cycle: bool,
+}
+
 impl<Model: models::GbModel> Gameboy<Model> {
     /// Clock the entire gameboy by M-cycle
-    pub fn clock(&mut self) {
-        let cpu_out = self.cpu.clock(self.cpu_input);
+    pub fn clock(&mut self) -> ClockDebug {
+        let CpuRunnerYield {
+            pins: cpu_pins_out,
+            is_fetch_cycle,
+        } = self.cpu.clock(self.cpu_input);
 
         let chips: &mut [&mut dyn Chip] = &mut [
             &mut self.ppu,
@@ -83,7 +91,7 @@ impl<Model: models::GbModel> Gameboy<Model> {
             let mut ir = self.interrupt_request;
 
             for chip in chips {
-                chip.clock(cpu_out, &mut data, &mut ir);
+                chip.clock(cpu_pins_out, &mut data, &mut ir);
             }
 
             self.interrupt_request = ir;
@@ -91,7 +99,7 @@ impl<Model: models::GbModel> Gameboy<Model> {
         };
 
         // Handle changes to IE & IF (handled independently from chips)
-        match cpu_out {
+        match cpu_pins_out {
             CpuOutputPins::Write { addr: 0xFF0F, data } => self.interrupt_request = data & 0x1F,
             CpuOutputPins::Write { addr: 0xFFFF, data } => self.interrupt_enable = data & 0x1F,
             _ => (),
@@ -106,11 +114,26 @@ impl<Model: models::GbModel> Gameboy<Model> {
             interrupt_60h: interrupt_requests & (1 << 4) != 0,
 
             // IE & IF are not part of any chip, so they must be handled separately
-            data: match cpu_out {
+            data: match cpu_pins_out {
                 CpuOutputPins::Read { addr: 0xFF0F } => self.interrupt_request,
                 CpuOutputPins::Read { addr: 0xFFFF } => self.interrupt_enable,
                 _ => bus_output,
             },
+        };
+
+        ClockDebug { is_fetch_cycle }
+    }
+
+    /// Clock the gameboy by the time it takes to complete one instruction
+    pub fn step_instruction(&mut self) {
+        loop {
+            if let ClockDebug {
+                is_fetch_cycle: true,
+                ..
+            } = self.clock()
+            {
+                break;
+            }
         }
     }
 }

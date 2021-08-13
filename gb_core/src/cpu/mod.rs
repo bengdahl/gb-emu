@@ -2,7 +2,7 @@ pub mod assembler;
 mod decode;
 mod execute;
 
-pub use execute::CpuRunner;
+pub use execute::{CpuRunner, CpuRunnerYield};
 pub use registers::{FRegister, Registers};
 
 /// Contains the state of a LR35902 CPU.

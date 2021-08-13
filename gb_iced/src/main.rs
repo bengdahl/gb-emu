@@ -7,10 +7,14 @@ enum Message {
     Pressed(gb_core::gameboy::joypad::Button),
     Released(gb_core::gameboy::joypad::Button),
     TickFrame,
+    TogglePause,
+    DebugCpu,
+    StepInstruction,
 }
 
 struct App {
     gameboy: gb_core::gameboy::Gameboy<gb_core::gameboy::models::DMG>,
+    paused: bool,
 }
 
 impl Application for App {
@@ -26,6 +30,7 @@ impl Application for App {
 
         let mut app = App {
             gameboy: gb_core::gameboy::Gameboy::new(buf).unwrap(),
+            paused: true,
         };
         app.gameboy.reset();
 
@@ -34,7 +39,11 @@ impl Application for App {
     }
 
     fn title(&self) -> String {
-        String::from("Hello world")
+        if !self.paused {
+            format!("GameBoy")
+        } else {
+            format!("GameBoy - Paused")
+        }
     }
 
     fn update(
@@ -44,10 +53,11 @@ impl Application for App {
     ) -> iced::Command<Message> {
         match message {
             Message::TickFrame => {
-                for _ in 0..gb_core::gameboy::ppu::monochrome::FRAME_T_CYCLES {
-                    self.gameboy.clock()
+                if !self.paused {
+                    for _ in 0..gb_core::gameboy::ppu::monochrome::FRAME_T_CYCLES / 4 {
+                        self.gameboy.clock();
+                    }
                 }
-
                 iced::Command::none()
             }
 
@@ -57,6 +67,21 @@ impl Application for App {
             }
             Message::Released(button) => {
                 self.gameboy.joypad.release(button);
+                iced::Command::none()
+            }
+
+            Message::TogglePause => {
+                self.paused = !self.paused;
+                iced::Command::none()
+            }
+
+            Message::DebugCpu => {
+                println!("{:?}", self.gameboy.cpu);
+                iced::Command::none()
+            }
+            Message::StepInstruction => {
+                self.gameboy.step_instruction();
+                println!("{:?}", self.gameboy.cpu);
                 iced::Command::none()
             }
         }
@@ -95,7 +120,14 @@ impl Application for App {
             iced_native::subscription::events_with(|event, _status| match event {
                 iced_native::Event::Keyboard(e) => match e {
                     iced::keyboard::Event::KeyPressed { key_code, .. } => {
-                        keycode_to_button(key_code).map(Message::Pressed)
+                        keycode_to_button(key_code)
+                            .map(Message::Pressed)
+                            .or_else(|| match key_code {
+                                KeyCode::P => Some(Message::TogglePause),
+                                KeyCode::D => Some(Message::DebugCpu),
+                                KeyCode::N => Some(Message::StepInstruction),
+                                _ => None,
+                            })
                     }
                     iced::keyboard::Event::KeyReleased { key_code, .. } => {
                         keycode_to_button(key_code).map(Message::Released)

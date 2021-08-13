@@ -90,6 +90,8 @@ impl InstructionTest {
                         data,
                         ..Default::default()
                     });
+                    let out = out.pins;
+
                     println!("CPU: {:?}", self.cpu.cpu);
                     self.cycles_elapsed += 1;
                     if self.cycles_elapsed >= self.max_cycles.unwrap_or(u64::MAX) {
@@ -140,7 +142,8 @@ fn nop() {
         cpu.clock(CpuInputPins {
             data: 0,
             ..Default::default()
-        }),
+        })
+        .pins,
         // Should fetch first instruction
         CpuOutputPins::Read { addr: 0 }
     ),);
@@ -149,7 +152,8 @@ fn nop() {
         cpu.clock(CpuInputPins {
             data: 0x00, // NOP
             ..Default::default()
-        }),
+        })
+        .pins,
         // Recieved NOP, should immediately fetch next instruction due to fetch/execute overlap
         CpuOutputPins::Read { addr: 1 }
     ));

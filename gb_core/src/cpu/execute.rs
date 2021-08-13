@@ -361,6 +361,12 @@ impl super::Cpu {
     }
 }
 
+pub struct CpuRunnerYield {
+    pub pins: CpuOutputPins,
+    /// Indicates that the CPU is fetching the next opcode. Used for debug purposes.
+    pub is_fetch_cycle: bool,
+}
+
 /// Provides a wrapper to use around the generator underneath the CPU execution logic.
 pub struct CpuRunner {
     pub cpu: super::Cpu,
@@ -368,7 +374,7 @@ pub struct CpuRunner {
         Box<
             dyn std::ops::Generator<
                 (super::Cpu, CpuInputPins),
-                Yield = (super::Cpu, CpuOutputPins),
+                Yield = (super::Cpu, CpuRunnerYield),
                 Return = !,
             >,
         >,
@@ -377,7 +383,7 @@ pub struct CpuRunner {
 
 impl CpuRunner {
     /// Clock the CPU by exactly one M-cycle
-    pub fn clock(&mut self, pins: CpuInputPins) -> CpuOutputPins {
+    pub fn clock(&mut self, pins: CpuInputPins) -> CpuRunnerYield {
         use std::ops::GeneratorState;
         match self.gen.as_mut().resume((self.cpu, pins)) {
             GeneratorState::Yielded((cpu, pins_out)) => {
@@ -389,19 +395,31 @@ impl CpuRunner {
     }
 }
 
+impl std::fmt::Debug for CpuRunner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CpuRunner")
+            .field("Cpu", &self.cpu)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Yields a generator containing state that will run the cpu
 fn cpu_runner_gen(
-) -> impl std::ops::Generator<(super::Cpu, CpuInputPins), Yield = (super::Cpu, CpuOutputPins), Return = !>
+) -> impl std::ops::Generator<(super::Cpu, CpuInputPins), Yield = (super::Cpu, CpuRunnerYield), Return = !>
 {
     // Every `yield` here will cause the CPU to wait for one memory cycle.
     #[allow(unused_assignments)]
     move |t: (super::Cpu, CpuInputPins)| {
         let (mut cpu, mut pins) = t;
         let mut halted = false;
+        let mut fetch = false;
         loop {
             macro_rules! cpu_yield {
-                ($yielded:expr) => {
-                    let _yielded = $yielded;
+                ($pins:expr) => {
+                    let _yielded = CpuRunnerYield {
+                        pins: $pins,
+                        is_fetch_cycle: fetch,
+                    };
                     (cpu, pins) = yield (cpu, _yielded);
                 };
             }
@@ -500,7 +518,9 @@ fn cpu_runner_gen(
             }
 
             // Fetch
+            fetch = true;
             cpu_yield!(cpu.fetch_byte());
+            fetch = false;
             let opcode = super::decode::Opcode(pins.data);
 
             // Decode & execute
