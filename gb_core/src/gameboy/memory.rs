@@ -55,7 +55,6 @@ impl super::Chip for Memory {
                     *data = self[addr];
                 }
                 CpuOutputPins::Write { addr, data } => {
-                    debug_assert!(Self::address_is_in_range(addr));
                     self[addr] = data;
                 }
             }
