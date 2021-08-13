@@ -275,6 +275,7 @@ fn ppu_gen() -> impl std::ops::Generator<
             }
 
             // HBlank (mode 0)
+            ppu.borrow_mut().set_mode(0);
             while cycle < 456 {
                 cycle += 1;
                 ppu = yield ppu;
