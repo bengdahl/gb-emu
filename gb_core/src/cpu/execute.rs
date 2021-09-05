@@ -373,10 +373,11 @@ pub struct CpuRunner {
     gen: std::pin::Pin<
         Box<
             dyn std::ops::Generator<
-                (super::Cpu, CpuInputPins),
-                Yield = (super::Cpu, CpuRunnerYield),
-                Return = !,
-            >,
+                    (super::Cpu, CpuInputPins),
+                    Yield = (super::Cpu, CpuRunnerYield),
+                    Return = !,
+                > + Send
+                + Sync,
         >,
     >,
 }
@@ -404,9 +405,12 @@ impl std::fmt::Debug for CpuRunner {
 }
 
 /// Yields a generator containing state that will run the cpu
-fn cpu_runner_gen(
-) -> impl std::ops::Generator<(super::Cpu, CpuInputPins), Yield = (super::Cpu, CpuRunnerYield), Return = !>
-{
+fn cpu_runner_gen() -> impl std::ops::Generator<
+    (super::Cpu, CpuInputPins),
+    Yield = (super::Cpu, CpuRunnerYield),
+    Return = !,
+> + Send
+       + Sync {
     // Every `yield` here will cause the CPU to wait for one memory cycle.
     #[allow(unused_assignments)]
     move |t: (super::Cpu, CpuInputPins)| {

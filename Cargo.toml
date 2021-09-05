@@ -1,2 +1,3 @@
 [workspace]
-members = ["gb_iced", "gb_core"]
+resolver = "2"
+members = ["gb_iced", "gb_core", "gb_wgpu"]

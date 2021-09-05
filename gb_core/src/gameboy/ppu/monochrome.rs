@@ -1,9 +1,8 @@
 //! An implementation of the Gameboy monochrome PPU
-
 use crate::cpu::CpuOutputPins;
 
 use super::{registers::*, PPU};
-use std::{cell::RefCell, fmt::Debug, ops::GeneratorState, rc::Rc};
+use std::{fmt::Debug, ops::GeneratorState, pin::Pin, sync::Arc};
 
 pub const FRAME_T_CYCLES: usize = 70224;
 
@@ -38,7 +37,7 @@ pub struct MonochromePpuState {
     vblank_irq: bool,
     stat_irq: bool,
 
-    frame: Rc<Frame>,
+    frame: Arc<Frame>,
 }
 
 impl Debug for MonochromePpuState {
@@ -59,17 +58,11 @@ impl Debug for MonochromePpuState {
     }
 }
 
+type PpuGenType = Box<dyn std::ops::Generator<(), Yield = (), Return = !> + Send + Sync>;
+
 pub struct MonochromePpu {
-    pub state: Rc<RefCell<MonochromePpuState>>,
-    gen: std::pin::Pin<
-        Box<
-            dyn std::ops::Generator<
-                Rc<RefCell<MonochromePpuState>>,
-                Yield = Rc<RefCell<MonochromePpuState>>,
-                Return = !,
-            >,
-        >,
-    >,
+    pub state: Box<MonochromePpuState>,
+    gen: std::pin::Pin<PpuGenType>,
 }
 
 impl MonochromePpu {
@@ -97,16 +90,24 @@ impl MonochromePpu {
             vblank_irq: false,
             stat_irq: false,
 
-            frame: Rc::new(Frame {
+            frame: Arc::new(Frame {
                 pixels: [0; 144 * 160],
                 width: 160,
                 height: 144,
             }),
         };
 
+        let mut state = Box::new(state);
+        let state_ptr = state.as_mut() as *mut _;
         MonochromePpu {
-            state: Rc::new(RefCell::new(state)),
-            gen: Box::pin(ppu_gen()),
+            state,
+            // Unfortunately, it's not currently possible to have a generator
+            // borrow a resume argument, so I have to resort to this awfulness.
+            //
+            // Hopefully, if I'm think about this right, we shouldn't run into any
+            // problems because `self.gen` is only ever accessed in `self.clock_t_state`,
+            // which is behind `&mut self`.
+            gen: ppu_gen(unsafe { &mut *state_ptr }),
         }
     }
 }
@@ -197,12 +198,8 @@ impl MonochromePpuState {
     }
 }
 
-fn ppu_gen() -> impl std::ops::Generator<
-    Rc<RefCell<MonochromePpuState>>,
-    Yield = Rc<RefCell<MonochromePpuState>>,
-    Return = !,
-> {
-    |mut ppu: Rc<RefCell<MonochromePpuState>>| loop {
+fn ppu_gen(ppu: &'static mut MonochromePpuState) -> Pin<PpuGenType> {
+    Box::pin(move || loop {
         let mut frame = Frame {
             pixels: [0; 144 * 160],
             width: 160,
@@ -211,25 +208,24 @@ fn ppu_gen() -> impl std::ops::Generator<
 
         // Drawing lines
         for line in 0..144 {
-            ppu.borrow_mut().set_ly(line);
+            ppu.set_ly(line);
 
             let mut cycle = 0;
             // OAM Search (mode 2)
-            ppu.borrow_mut().set_mode(2);
+            ppu.set_mode(2);
             for _ in 0..80 {
                 cycle += 1;
-                ppu = yield ppu;
+                yield;
             }
 
             // Drawing (mode 3)
             // TODO: this only draws the background for now
-            ppu.borrow_mut().set_mode(3);
+            ppu.set_mode(3);
             let mut dot = 0;
             let mut screen_tile_x = 0;
-            let mut x = ppu.borrow().scx;
+            let mut x = ppu.scx;
             while dot < 160 {
                 let (bg_fifo_lo, bg_fifo_hi) = {
-                    let ppu = ppu.borrow();
                     let tilemap = if ppu.lcdc.contains(LCDC::BG_TILEMAP_AREA) {
                         &ppu.bg_map_2
                     } else {
@@ -243,11 +239,11 @@ fn ppu_gen() -> impl std::ops::Generator<
 
                     let tile_y = ppu.scy.wrapping_add(line) % 8;
                     if ppu.lcdc.contains(LCDC::BG_TILE_DATA_AREA) {
-                        // $8000 method
+                        //  method
                         let offset = tile_idx as usize * 16 + tile_y as usize * 2;
                         (tile_data[offset + 0], tile_data[offset + 1])
                     } else {
-                        // $8800 method
+                        //  method
                         let offset =
                             (0x1000 + (tile_idx as i8 as i16) * 16 + (tile_y as i16) * 2) as usize;
                         (tile_data[offset + 0], tile_data[offset + 1])
@@ -261,40 +257,39 @@ fn ppu_gen() -> impl std::ops::Generator<
                     let bg_color_lo = (bg_fifo_lo >> bit) & 1;
                     let bg_color = (bg_color_hi << 1) | bg_color_lo;
 
-                    let bg_color_rgb =
-                        color::calculate_monochrome_color_id(ppu.borrow().bgp, bg_color);
+                    let bg_color_rgb = color::calculate_monochrome_color_id(ppu.bgp, bg_color);
                     frame.pixels[160 * line as usize + dot as usize] =
                         color::COLORS[bg_color_rgb as usize];
                     dot += 1;
 
                     cycle += 1;
-                    ppu = yield ppu;
+                    yield;
                 }
                 x = 0;
                 screen_tile_x += 1;
             }
 
             // HBlank (mode 0)
-            ppu.borrow_mut().set_mode(0);
+            ppu.set_mode(0);
             while cycle < 456 {
                 cycle += 1;
-                ppu = yield ppu;
+                yield;
             }
         }
 
-        ppu.borrow_mut().frame = Rc::new(frame);
+        ppu.frame = Arc::new(frame);
 
         // VBlank (mode 1)
-        ppu.borrow_mut().set_mode(1);
-        ppu.borrow_mut().vblank_irq = true;
+        ppu.set_mode(1);
+        ppu.vblank_irq = true;
         for line in 144..154 {
-            ppu.borrow_mut().set_ly(line);
+            ppu.set_ly(line);
             for _ in 0usize..456 {
-                ppu = yield ppu;
+                yield;
             }
         }
-        ppu.borrow_mut().vblank_irq = false;
-    }
+        ppu.vblank_irq = false;
+    })
 }
 
 impl PPU for MonochromePpu {
@@ -302,64 +297,63 @@ impl PPU for MonochromePpu {
 
     #[inline]
     fn perform_io(&mut self, input: CpuOutputPins, data: &mut u8, interrupt_request: &mut u8) {
-        let mut state = self.state.borrow_mut();
         match input {
             CpuOutputPins::Write { addr, data: v } => match addr {
-                0x8000..=0x97FF => state.tile_data[addr as usize - 0x8000] = v,
-                0x9800..=0x9BFF => state.bg_map_1[addr as usize - 0x9800] = v,
-                0x9C00..=0x9FFF => state.bg_map_2[addr as usize - 0x9C00] = v,
+                0x8000..=0x97FF => self.state.tile_data[addr as usize - 0x8000] = v,
+                0x9800..=0x9BFF => self.state.bg_map_1[addr as usize - 0x9800] = v,
+                0x9C00..=0x9FFF => self.state.bg_map_2[addr as usize - 0x9C00] = v,
 
-                0xFE00..=0xFE9F => state.oam[addr as usize - 0xFE00] = v,
+                0xFE00..=0xFE9F => self.state.oam[addr as usize - 0xFE00] = v,
 
-                0xFF40 => state.lcdc = LCDC::from_bits_truncate(v),
+                0xFF40 => self.state.lcdc = LCDC::from_bits_truncate(v),
                 0xFF41 => {
-                    state.stat = STAT::from_bits_truncate(v);
-                    state.update_stat_interrupt();
+                    self.state.stat = STAT::from_bits_truncate(v);
+                    self.state.update_stat_interrupt();
                 }
-                0xFF42 => state.scy = v,
-                0xFF43 => state.scx = v,
-                0xFF44 => state.ly = v,
-                0xFF45 => state.lyc = v,
+                0xFF42 => self.state.scy = v,
+                0xFF43 => self.state.scx = v,
+                0xFF44 => self.state.ly = v,
+                0xFF45 => self.state.lyc = v,
                 0xFF46 => (),
-                0xFF47 => state.bgp = v,
-                0xFF48 => state.obp0 = v,
-                0xFF49 => state.obp1 = v,
-                0xFF4A => state.wy = v,
-                0xFF4B => state.wx = v,
+                0xFF47 => self.state.bgp = v,
+                0xFF48 => self.state.obp0 = v,
+                0xFF49 => self.state.obp1 = v,
+                0xFF4A => self.state.wy = v,
+                0xFF4B => self.state.wx = v,
                 _ => (),
             },
             CpuOutputPins::Read { addr } => match addr {
-                0x8000..=0x97FF => *data = state.tile_data[addr as usize - 0x8000],
-                0x9800..=0x9BFF => *data = state.bg_map_1[addr as usize - 0x9800],
-                0x9C00..=0x9FFF => *data = state.bg_map_2[addr as usize - 0x9C00],
+                0x8000..=0x97FF => *data = self.state.tile_data[addr as usize - 0x8000],
+                0x9800..=0x9BFF => *data = self.state.bg_map_1[addr as usize - 0x9800],
+                0x9C00..=0x9FFF => *data = self.state.bg_map_2[addr as usize - 0x9C00],
 
-                0xFE00..=0xFE9F => *data = state.oam[addr as usize - 0xFE00],
+                0xFE00..=0xFE9F => *data = self.state.oam[addr as usize - 0xFE00],
 
-                0xFF40 => *data = state.lcdc.bits(),
-                0xFF41 => *data = state.stat.bits(),
-                0xFF42 => *data = state.scy,
-                0xFF43 => *data = state.scx,
-                0xFF44 => *data = state.ly,
-                0xFF45 => *data = state.lyc,
+                0xFF40 => *data = self.state.lcdc.bits(),
+                0xFF41 => *data = self.state.stat.bits(),
+                0xFF42 => *data = self.state.scy,
+                0xFF43 => *data = self.state.scx,
+                0xFF44 => *data = self.state.ly,
+                0xFF45 => *data = self.state.lyc,
                 0xFF46 => *data = 0,
-                0xFF47 => *data = state.bgp,
-                0xFF48 => *data = state.obp0,
-                0xFF49 => *data = state.obp1,
-                0xFF4A => *data = state.wy,
-                0xFF4B => *data = state.wx,
+                0xFF47 => *data = self.state.bgp,
+                0xFF48 => *data = self.state.obp0,
+                0xFF49 => *data = self.state.obp1,
+                0xFF4A => *data = self.state.wy,
+                0xFF4B => *data = self.state.wx,
 
                 _ => (),
             },
         };
 
         let mut irq = *interrupt_request;
-        if state.vblank_irq {
+        if self.state.vblank_irq {
             irq |= 1 << 0;
         } else {
             irq &= !(1 << 0);
         }
 
-        if state.stat_irq {
+        if self.state.stat_irq {
             irq |= 1 << 1;
         } else {
             irq &= !(1 << 1);
@@ -369,17 +363,14 @@ impl PPU for MonochromePpu {
     }
 
     fn clock_t_state(&mut self) {
-        // im not sure if theres a good way to borrow an object only for the duration of a generator run,
-        // so instead i just clone the state in and out of the generator context. unfortunately this means
-        // i have to use Rc<RefCell> to avoid doing huge copies hundreds of times a second
-        self.state = match self.gen.as_mut().resume(self.state.clone()) {
-            GeneratorState::Yielded(state) => state,
+        match self.gen.as_mut().resume(()) {
+            GeneratorState::Yielded(_) => (),
             GeneratorState::Complete(_) => unreachable!(),
         };
     }
 
     fn get_frame(&self) -> Frame {
-        *self.state.borrow().frame
+        *self.state.frame
     }
 }
 
