@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use gb_core::gameboy::joypad::Button;
 use smol::channel::Sender;
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -16,7 +17,11 @@ pub enum ViewEvent {
     },
 }
 
-pub enum InputEvent {}
+#[derive(Debug)]
+pub enum InputEvent {
+    ButtonPressed(gb_core::gameboy::joypad::Button),
+    ButtonReleased(gb_core::gameboy::joypad::Button),
+}
 
 pub struct ViewSetup {
     event_loop: EventLoop<ViewEvent>,
@@ -81,6 +86,16 @@ impl ViewSetup {
                         (ElementState::Pressed, VirtualKeyCode::P) => {
                             println!("Ping!");
                         }
+                        (state, key) if keycode_to_joypad(key).is_some() => smol::block_on(async {
+                            let button = keycode_to_joypad(key).unwrap();
+                            self.input_send
+                                .send(match state {
+                                    ElementState::Pressed => InputEvent::ButtonPressed(button),
+                                    ElementState::Released => InputEvent::ButtonReleased(button),
+                                })
+                                .await
+                                .unwrap()
+                        }),
                         _ => {}
                     },
                     _ => {}
@@ -118,5 +133,19 @@ impl ViewSetup {
                 }
                 _ => {}
             })
+    }
+}
+
+fn keycode_to_joypad(key: VirtualKeyCode) -> Option<Button> {
+    match key {
+        VirtualKeyCode::Z => Some(Button::A),
+        VirtualKeyCode::X => Some(Button::B),
+        VirtualKeyCode::G => Some(Button::Select),
+        VirtualKeyCode::H => Some(Button::Start),
+        VirtualKeyCode::Up => Some(Button::Up),
+        VirtualKeyCode::Down => Some(Button::Down),
+        VirtualKeyCode::Left => Some(Button::Left),
+        VirtualKeyCode::Right => Some(Button::Right),
+        _ => None,
     }
 }
