@@ -110,7 +110,7 @@ impl Application for App {
 
     fn view(&mut self) -> Element<'_, Self::Message> {
         let (frame, framew, frameh) = self.gameboy.get_frame(2);
-        let (tile_data, tilew, tileh) = self.gameboy.ppu.state.display_tile_data(2);
+        let (tile_data, tilew, tileh) = self.gameboy.ppu.display_tile_data(2);
         iced::Row::new()
             // .push(iced::Text::new("Hello, world!"))
             .push(

@@ -2,7 +2,7 @@
 use crate::cpu::CpuOutputPins;
 
 use super::{registers::*, PPU};
-use std::{fmt::Debug, ops::GeneratorState, pin::Pin, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
 
 pub const FRAME_T_CYCLES: usize = 70224;
 
@@ -14,7 +14,7 @@ pub struct Frame {
 }
 
 #[derive(Clone)]
-pub struct MonochromePpuState {
+pub struct MonochromePpu {
     pub tile_data: [u8; 0x9800 - 0x8000],
 
     pub bg_map_1: [u8; 0x9C00 - 0x9800],
@@ -40,7 +40,7 @@ pub struct MonochromePpuState {
     frame: Arc<Frame>,
 }
 
-impl Debug for MonochromePpuState {
+impl Debug for MonochromePpu {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MonochromePpuState")
             .field("LCDC", &self.lcdc)
@@ -58,16 +58,9 @@ impl Debug for MonochromePpuState {
     }
 }
 
-type PpuGenType = Box<dyn std::ops::Generator<(), Yield = (), Return = !> + Send + Sync>;
-
-pub struct MonochromePpu {
-    pub state: Box<MonochromePpuState>,
-    gen: std::pin::Pin<PpuGenType>,
-}
-
 impl MonochromePpu {
     pub fn new() -> Self {
-        let state = MonochromePpuState {
+        MonochromePpu {
             tile_data: [0u8; 0x9800 - 0x8000],
 
             bg_map_1: [0u8; 0x9C00 - 0x9800],
@@ -95,24 +88,11 @@ impl MonochromePpu {
                 width: 160,
                 height: 144,
             }),
-        };
-
-        let mut state = Box::new(state);
-        let state_ptr = state.as_mut() as *mut _;
-        MonochromePpu {
-            state,
-            // Unfortunately, it's not currently possible to have a generator
-            // borrow a resume argument, so I have to resort to this awfulness.
-            //
-            // Hopefully, if I'm think about this right, we shouldn't run into any
-            // problems because `self.gen` is only ever accessed in `self.clock_t_state`,
-            // which is behind `&mut self`.
-            gen: ppu_gen(unsafe { &mut *state_ptr }),
         }
     }
 }
 
-impl MonochromePpuState {
+impl MonochromePpu {
     #[inline(always)]
     fn set_ly(&mut self, ly: u8) {
         debug_assert!(ly <= 153);
@@ -198,100 +178,6 @@ impl MonochromePpuState {
     }
 }
 
-fn ppu_gen(ppu: &'static mut MonochromePpuState) -> Pin<PpuGenType> {
-    Box::pin(move || loop {
-        let mut frame = Frame {
-            pixels: [0; 144 * 160],
-            width: 160,
-            height: 144,
-        };
-
-        // Drawing lines
-        for line in 0..144 {
-            ppu.set_ly(line);
-
-            let mut cycle = 0;
-            // OAM Search (mode 2)
-            ppu.set_mode(2);
-            for _ in 0..80 {
-                cycle += 1;
-                yield;
-            }
-
-            // Drawing (mode 3)
-            // TODO: this only draws the background for now
-            ppu.set_mode(3);
-            let mut dot = 0;
-            let mut screen_tile_x = 0;
-            let mut x = ppu.scx;
-            while dot < 160 {
-                let (bg_fifo_lo, bg_fifo_hi) = {
-                    let tilemap = if ppu.lcdc.contains(LCDC::BG_TILEMAP_AREA) {
-                        &ppu.bg_map_2
-                    } else {
-                        &ppu.bg_map_1
-                    };
-                    let tile_data = &ppu.tile_data;
-
-                    let fetcher_x = ((ppu.scx / 8) + screen_tile_x) & 0x1F;
-                    let fetcher_y = ppu.scy.wrapping_add(line) / 8;
-                    let tile_idx = tilemap[fetcher_y as usize * 32 + fetcher_x as usize];
-
-                    let tile_y = ppu.scy.wrapping_add(line) % 8;
-                    if ppu.lcdc.contains(LCDC::BG_TILE_DATA_AREA) {
-                        //  method
-                        let offset = tile_idx as usize * 16 + tile_y as usize * 2;
-                        (tile_data[offset + 0], tile_data[offset + 1])
-                    } else {
-                        //  method
-                        let offset =
-                            (0x1000 + (tile_idx as i8 as i16) * 16 + (tile_y as i16) * 2) as usize;
-                        (tile_data[offset + 0], tile_data[offset + 1])
-                    }
-                };
-
-                while x < 8 {
-                    let bit = 7 - x;
-                    x += 1;
-                    let bg_color_hi = (bg_fifo_hi >> bit) & 1;
-                    let bg_color_lo = (bg_fifo_lo >> bit) & 1;
-                    let bg_color = (bg_color_hi << 1) | bg_color_lo;
-
-                    let bg_color_rgb = color::calculate_monochrome_color_id(ppu.bgp, bg_color);
-                    frame.pixels[160 * line as usize + dot as usize] =
-                        color::COLORS[bg_color_rgb as usize];
-                    dot += 1;
-
-                    cycle += 1;
-                    yield;
-                }
-                x = 0;
-                screen_tile_x += 1;
-            }
-
-            // HBlank (mode 0)
-            ppu.set_mode(0);
-            while cycle < 456 {
-                cycle += 1;
-                yield;
-            }
-        }
-
-        ppu.frame = Arc::new(frame);
-
-        // VBlank (mode 1)
-        ppu.set_mode(1);
-        ppu.vblank_irq = true;
-        for line in 144..154 {
-            ppu.set_ly(line);
-            for _ in 0usize..456 {
-                yield;
-            }
-        }
-        ppu.vblank_irq = false;
-    })
-}
-
 impl PPU for MonochromePpu {
     type Frame = Frame;
 
@@ -299,61 +185,61 @@ impl PPU for MonochromePpu {
     fn perform_io(&mut self, input: CpuOutputPins, data: &mut u8, interrupt_request: &mut u8) {
         match input {
             CpuOutputPins::Write { addr, data: v } => match addr {
-                0x8000..=0x97FF => self.state.tile_data[addr as usize - 0x8000] = v,
-                0x9800..=0x9BFF => self.state.bg_map_1[addr as usize - 0x9800] = v,
-                0x9C00..=0x9FFF => self.state.bg_map_2[addr as usize - 0x9C00] = v,
+                0x8000..=0x97FF => self.tile_data[addr as usize - 0x8000] = v,
+                0x9800..=0x9BFF => self.bg_map_1[addr as usize - 0x9800] = v,
+                0x9C00..=0x9FFF => self.bg_map_2[addr as usize - 0x9C00] = v,
 
-                0xFE00..=0xFE9F => self.state.oam[addr as usize - 0xFE00] = v,
+                0xFE00..=0xFE9F => self.oam[addr as usize - 0xFE00] = v,
 
-                0xFF40 => self.state.lcdc = LCDC::from_bits_truncate(v),
+                0xFF40 => self.lcdc = LCDC::from_bits_truncate(v),
                 0xFF41 => {
-                    self.state.stat = STAT::from_bits_truncate(v);
-                    self.state.update_stat_interrupt();
+                    self.stat = STAT::from_bits_truncate(v);
+                    self.update_stat_interrupt();
                 }
-                0xFF42 => self.state.scy = v,
-                0xFF43 => self.state.scx = v,
-                0xFF44 => self.state.ly = v,
-                0xFF45 => self.state.lyc = v,
+                0xFF42 => self.scy = v,
+                0xFF43 => self.scx = v,
+                0xFF44 => self.ly = v,
+                0xFF45 => self.lyc = v,
                 0xFF46 => (),
-                0xFF47 => self.state.bgp = v,
-                0xFF48 => self.state.obp0 = v,
-                0xFF49 => self.state.obp1 = v,
-                0xFF4A => self.state.wy = v,
-                0xFF4B => self.state.wx = v,
+                0xFF47 => self.bgp = v,
+                0xFF48 => self.obp0 = v,
+                0xFF49 => self.obp1 = v,
+                0xFF4A => self.wy = v,
+                0xFF4B => self.wx = v,
                 _ => (),
             },
             CpuOutputPins::Read { addr } => match addr {
-                0x8000..=0x97FF => *data = self.state.tile_data[addr as usize - 0x8000],
-                0x9800..=0x9BFF => *data = self.state.bg_map_1[addr as usize - 0x9800],
-                0x9C00..=0x9FFF => *data = self.state.bg_map_2[addr as usize - 0x9C00],
+                0x8000..=0x97FF => *data = self.tile_data[addr as usize - 0x8000],
+                0x9800..=0x9BFF => *data = self.bg_map_1[addr as usize - 0x9800],
+                0x9C00..=0x9FFF => *data = self.bg_map_2[addr as usize - 0x9C00],
 
-                0xFE00..=0xFE9F => *data = self.state.oam[addr as usize - 0xFE00],
+                0xFE00..=0xFE9F => *data = self.oam[addr as usize - 0xFE00],
 
-                0xFF40 => *data = self.state.lcdc.bits(),
-                0xFF41 => *data = self.state.stat.bits(),
-                0xFF42 => *data = self.state.scy,
-                0xFF43 => *data = self.state.scx,
-                0xFF44 => *data = self.state.ly,
-                0xFF45 => *data = self.state.lyc,
+                0xFF40 => *data = self.lcdc.bits(),
+                0xFF41 => *data = self.stat.bits(),
+                0xFF42 => *data = self.scy,
+                0xFF43 => *data = self.scx,
+                0xFF44 => *data = self.ly,
+                0xFF45 => *data = self.lyc,
                 0xFF46 => *data = 0,
-                0xFF47 => *data = self.state.bgp,
-                0xFF48 => *data = self.state.obp0,
-                0xFF49 => *data = self.state.obp1,
-                0xFF4A => *data = self.state.wy,
-                0xFF4B => *data = self.state.wx,
+                0xFF47 => *data = self.bgp,
+                0xFF48 => *data = self.obp0,
+                0xFF49 => *data = self.obp1,
+                0xFF4A => *data = self.wy,
+                0xFF4B => *data = self.wx,
 
                 _ => (),
             },
         };
 
         let mut irq = *interrupt_request;
-        if self.state.vblank_irq {
+        if self.vblank_irq {
             irq |= 1 << 0;
         } else {
             irq &= !(1 << 0);
         }
 
-        if self.state.stat_irq {
+        if self.stat_irq {
             irq |= 1 << 1;
         } else {
             irq &= !(1 << 1);
@@ -363,14 +249,11 @@ impl PPU for MonochromePpu {
     }
 
     fn clock_t_state(&mut self) {
-        match self.gen.as_mut().resume(()) {
-            GeneratorState::Yielded(_) => (),
-            GeneratorState::Complete(_) => unreachable!(),
-        };
+        todo!()
     }
 
     fn get_frame(&self) -> Frame {
-        *self.state.frame
+        *self.frame
     }
 }
 
