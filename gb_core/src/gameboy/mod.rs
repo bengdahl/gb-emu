@@ -67,7 +67,8 @@ impl Gameboy<DMG> {
 
 /// Contains information about a clock cycle for use by debugging methods
 pub struct ClockDebug {
-    is_fetch_cycle: bool,
+    pub is_fetch_cycle: bool,
+    pub opcode_fetched: Option<u16>,
 }
 
 impl<Model: models::GbModel> Gameboy<Model> {
@@ -77,6 +78,12 @@ impl<Model: models::GbModel> Gameboy<Model> {
             pins: cpu_pins_out,
             is_fetch_cycle,
         } = self.cpu.clock(self.cpu_input);
+
+        let opcode_fetched = if is_fetch_cycle {
+            Some(cpu_pins_out.addr())
+        } else {
+            None
+        };
 
         let chips: &mut [&mut dyn Chip] = &mut [
             &mut self.ppu,
@@ -121,7 +128,10 @@ impl<Model: models::GbModel> Gameboy<Model> {
             },
         };
 
-        ClockDebug { is_fetch_cycle }
+        ClockDebug {
+            is_fetch_cycle,
+            opcode_fetched,
+        }
     }
 
     /// Clock the gameboy by the time it takes to complete one instruction

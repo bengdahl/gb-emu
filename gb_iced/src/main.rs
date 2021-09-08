@@ -10,11 +10,13 @@ enum Message {
     TogglePause,
     DebugCpu,
     StepInstruction,
+    ToggleLog,
 }
 
 struct App {
     gameboy: gb_core::gameboy::Gameboy<gb_core::gameboy::models::DMG>,
     paused: bool,
+    log_instructions: bool,
 }
 
 impl Application for App {
@@ -31,6 +33,7 @@ impl Application for App {
         let mut app = App {
             gameboy: gb_core::gameboy::Gameboy::new(buf).unwrap(),
             paused: true,
+            log_instructions: false,
         };
         app.gameboy.reset();
 
@@ -55,7 +58,15 @@ impl Application for App {
             Message::TickFrame => {
                 if !self.paused {
                     for _ in 0..gb_core::gameboy::ppu::monochrome::FRAME_T_CYCLES / 4 {
-                        self.gameboy.clock();
+                        let debug_info = self.gameboy.clock();
+                        if self.log_instructions && debug_info.is_fetch_cycle {
+                            println!("{:?}", self.gameboy.cpu);
+                        }
+                        if let Some(0x19c9) = debug_info.opcode_fetched {
+                            self.paused = true;
+                            println!("{:?}", self.gameboy.cpu);
+                            break;
+                        }
                     }
                 }
                 iced::Command::none()
@@ -82,6 +93,16 @@ impl Application for App {
             Message::StepInstruction => {
                 self.gameboy.step_instruction();
                 println!("{:?}", self.gameboy.cpu);
+                iced::Command::none()
+            }
+
+            Message::ToggleLog => {
+                self.log_instructions = !self.log_instructions;
+                if self.log_instructions {
+                    println!("Logging ON");
+                } else {
+                    println!("Logging OFF");
+                }
                 iced::Command::none()
             }
         }
@@ -126,6 +147,7 @@ impl Application for App {
                                 KeyCode::P => Some(Message::TogglePause),
                                 KeyCode::D => Some(Message::DebugCpu),
                                 KeyCode::N => Some(Message::StepInstruction),
+                                KeyCode::L => Some(Message::ToggleLog),
                                 _ => None,
                             })
                     }
