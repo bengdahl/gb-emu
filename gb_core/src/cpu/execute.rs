@@ -1064,8 +1064,11 @@ fn cpu_runner_gen() -> impl std::ops::Generator<
                             let dest = decode::r(opcode.z());
                             let v = read_8_bits!(cpu, dest);
 
-                            let nv = match opcode.x() {
-                                0 => cpu.do_rotate_shift(v, decode::rot(opcode.y())),
+                            match opcode.x() {
+                                0 => {
+                                    let nv = cpu.do_rotate_shift(v, decode::rot(opcode.y()));
+                                    store_8_bits!(cpu, nv, dest);
+                                }
                                 1 => {
                                     // BIT
                                     let n = opcode.y();
@@ -1076,22 +1079,23 @@ fn cpu_runner_gen() -> impl std::ops::Generator<
                                         f.set(FRegister::HALFCARRY);
                                         f
                                     });
-                                    v
                                 }
                                 2 => {
                                     // RES
                                     let n = opcode.y();
-                                    v & !(1 << n)
+                                    let nv = v & !(1 << n);
+                                    store_8_bits!(cpu, nv, dest);
                                 }
                                 3 => {
                                     // SET
                                     let n = opcode.y();
-                                    v | (1 << n)
+                                    let nv = v | (1 << n);
+                                    store_8_bits!(cpu, nv, dest);
                                 }
                                 _ => unreachable!(),
-                            };
+                            }
 
-                            store_8_bits!(cpu, nv, dest);
+                            continue;
                         }
                         6 => {
                             // DI
@@ -1103,7 +1107,7 @@ fn cpu_runner_gen() -> impl std::ops::Generator<
                             cpu.ime = true;
                             continue;
                         }
-                        _ => panic!("Unidentified opcode"),
+                        _ => panic!("Unidentified opcode: {:?}, {:X?}", cpu, opcode),
                     },
                     4 => match opcode.y() {
                         y @ 0..=3 => {
