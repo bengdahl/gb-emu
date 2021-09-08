@@ -1,6 +1,6 @@
-use gb_core::gameboy::ppu::{monochrome, registers::*, PPU};
+use gb_core::gameboy::ppu::{self, color, registers::*, Ppu};
 
-fn set_tile_singlecolor(ppu: &mut monochrome::MonochromePpu, tile_idx: usize, color: u8) {
+fn set_tile_singlecolor(ppu: &mut Ppu, tile_idx: usize, color: u8) {
     assert!(color <= 3);
 
     let offset = tile_idx * 16;
@@ -15,15 +15,15 @@ fn set_tile_singlecolor(ppu: &mut monochrome::MonochromePpu, tile_idx: usize, co
     }
 }
 
-fn advance_frame(ppu: &mut monochrome::MonochromePpu) {
-    for _ in 0..monochrome::FRAME_T_CYCLES {
+fn advance_frame(ppu: &mut Ppu) {
+    for _ in 0..ppu::consts::FRAME_T_CYCLES {
         ppu.clock_t_state();
     }
 }
 
 #[test]
 fn ppu_singlecolor() {
-    let mut ppu = monochrome::MonochromePpu::new();
+    let mut ppu = Ppu::new();
 
     ppu.bg_map_1.fill(0);
     ppu.lcdc = LCDC::LCD_ENABLE | LCDC::BG_ENABLE | LCDC::BG_TILE_DATA_AREA;
@@ -34,11 +34,10 @@ fn ppu_singlecolor() {
         set_tile_singlecolor(&mut ppu, 0, color);
         advance_frame(&mut ppu);
         let frame = ppu.get_frame();
-        frame.pixels.iter().for_each(|&pix| {
+        frame.iter().for_each(|&pix| {
             assert_eq!(
                 pix,
-                monochrome::color::COLORS
-                    [monochrome::color::calculate_monochrome_color_id(ppu.bgp, color) as usize]
+                color::COLORS[color::calculate_monochrome_color_id(ppu.bgp, color) as usize]
             )
         });
     }
@@ -46,7 +45,7 @@ fn ppu_singlecolor() {
 
 #[test]
 fn ppu_bgp() {
-    let mut ppu = monochrome::MonochromePpu::new();
+    let mut ppu = Ppu::new();
 
     ppu.lcdc = LCDC::LCD_ENABLE | LCDC::BG_ENABLE | LCDC::BG_TILE_DATA_AREA;
     set_tile_singlecolor(&mut ppu, 0, 0b00);
@@ -66,9 +65,8 @@ fn ppu_bgp() {
         for color in 0..=3 {
             let i = color as usize * 8; // 8 pixel wide tiles
             assert_eq!(
-                frame.pixels[i],
-                monochrome::color::COLORS
-                    [monochrome::color::calculate_monochrome_color_id(bgp, color)]
+                frame[(i, 0)],
+                color::COLORS[color::calculate_monochrome_color_id(bgp, color)]
             );
         }
     }
@@ -89,7 +87,7 @@ fn calculate_monochrome_color() {
 
     for (bgp, cases) in tests {
         for (color, expected) in cases {
-            let actual = monochrome::color::calculate_monochrome_color_id(bgp, color);
+            let actual = color::calculate_monochrome_color_id(bgp, color);
             assert_eq!(
                 expected, actual,
                 "bgp: {:b}, color: {:b}, expected: {:X}, actual: {:X}",

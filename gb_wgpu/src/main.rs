@@ -28,7 +28,7 @@ fn main() {
 }
 
 fn game_thread(
-    mut gameboy: gb_core::gameboy::Gameboy<gb_core::gameboy::models::DMG>,
+    mut gameboy: gb_core::gameboy::Gameboy,
     input_recv: Receiver<window::InputEvent>,
     event_loop_proxy: winit::event_loop::EventLoopProxy<window::ViewEvent>,
 ) {
@@ -60,17 +60,13 @@ fn game_thread(
         let mut frame_timer = smol::Timer::interval(std::time::Duration::from_millis(16));
         while let Some(_) = frame_timer.next().await {
             let mut gameboy = gameboy.lock().await;
-            for _ in 0..gb_core::gameboy::ppu::monochrome::FRAME_T_CYCLES / 4 {
+            for _ in 0..gb_core::gameboy::ppu::consts::FRAME_T_CYCLES / 4 {
                 gameboy.clock();
             }
 
-            let (frame, width, height) = gameboy.get_frame(1);
+            let frame = gameboy.get_frame();
 
-            if let Err(_) = event_loop_proxy.send_event(ViewEvent::GameboyFrame {
-                pixels: frame,
-                width,
-                height,
-            }) {
+            if let Err(_) = event_loop_proxy.send_event(ViewEvent::GameboyFrame { frame }) {
                 break;
             }
         }

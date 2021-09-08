@@ -14,7 +14,7 @@ enum Message {
 }
 
 struct App {
-    gameboy: gb_core::gameboy::Gameboy<gb_core::gameboy::models::DMG>,
+    gameboy: gb_core::gameboy::Gameboy,
     paused: bool,
     log_instructions: bool,
 }
@@ -57,7 +57,7 @@ impl Application for App {
         match message {
             Message::TickFrame => {
                 if !self.paused {
-                    for _ in 0..gb_core::gameboy::ppu::monochrome::FRAME_T_CYCLES / 4 {
+                    for _ in 0..gb_core::gameboy::ppu::consts::FRAME_T_CYCLES / 4 {
                         let debug_info = self.gameboy.clock();
                         if self.log_instructions && debug_info.is_fetch_cycle {
                             println!("{:?}", self.gameboy.cpu);
@@ -109,15 +109,15 @@ impl Application for App {
     }
 
     fn view(&mut self) -> Element<'_, Self::Message> {
-        let (frame, framew, frameh) = self.gameboy.get_frame(2);
+        let frame = self.gameboy.get_frame();
         let (tile_data, tilew, tileh) = self.gameboy.ppu.display_tile_data(2);
         iced::Row::new()
             // .push(iced::Text::new("Hello, world!"))
             .push(
                 iced::Image::new(iced::image::Handle::from_pixels(
-                    framew as u32,
-                    frameh as u32,
-                    u32_to_bgra(frame),
+                    160 as u32,
+                    144 as u32,
+                    u32_to_bgra(frame.iter().copied()),
                 ))
                 .width(Length::FillPortion(5))
                 .height(Length::FillPortion(3)),
@@ -126,7 +126,7 @@ impl Application for App {
                 iced::Image::new(iced::image::Handle::from_pixels(
                     tilew as u32,
                     tileh as u32,
-                    u32_to_bgra(tile_data),
+                    u32_to_bgra(tile_data.iter().copied()),
                 ))
                 .width(Length::FillPortion(4))
                 .height(Length::FillPortion(4)),
@@ -179,8 +179,8 @@ fn main() {
     App::run(settings).unwrap();
 }
 
-fn u32_to_bgra(x: Vec<u32>) -> Vec<u8> {
-    x.iter().copied().flat_map(|p| p.to_le_bytes()).collect()
+fn u32_to_bgra(x: impl Iterator<Item = u32>) -> Vec<u8> {
+    x.flat_map(|p| p.to_le_bytes()).collect()
 }
 
 fn keycode_to_button(key_code: KeyCode) -> Option<gb_core::gameboy::joypad::Button> {

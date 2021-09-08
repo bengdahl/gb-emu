@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use gb_core::gameboy::joypad::Button;
+use gb_core::gameboy::{joypad::Button, ppu::frame::Frame};
 use smol::channel::Sender;
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -10,11 +10,7 @@ use winit::{
 
 #[derive(Debug)]
 pub enum ViewEvent {
-    GameboyFrame {
-        pixels: Vec<u32>,
-        width: usize,
-        height: usize,
-    },
+    GameboyFrame { frame: Frame },
 }
 
 #[derive(Debug)]
@@ -102,20 +98,16 @@ impl ViewSetup {
                 },
 
                 Event::UserEvent(event) => match event {
-                    ViewEvent::GameboyFrame {
-                        pixels,
-                        width,
-                        height,
-                    } => {
+                    ViewEvent::GameboyFrame { frame } => {
                         let framebuffer = pixels_ctx.get_frame();
                         let fb_pitch = 160 * 4;
 
-                        for row in 0..height {
-                            for col in 0..width {
-                                let pix = pixels[row * width + col];
+                        for y in 0..144 {
+                            for x in 0..160 {
+                                let pix = frame[(x, y)];
                                 let [r, g, b, a] = pix.to_le_bytes();
 
-                                let fb_offset = row * fb_pitch + col * 4;
+                                let fb_offset = y * fb_pitch + x * 4;
                                 framebuffer[fb_offset + 0] = b;
                                 framebuffer[fb_offset + 1] = g;
                                 framebuffer[fb_offset + 2] = r;

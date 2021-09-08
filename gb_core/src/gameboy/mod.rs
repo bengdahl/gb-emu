@@ -6,13 +6,12 @@ pub mod timer;
 
 use crate::cpu::{CpuInputPins, CpuOutputPins, CpuRunner, CpuRunnerYield};
 use memory::Memory;
-use ppu::PPU;
 
-use self::{cart::Cart, models::DMG};
+use self::{cart::Cart, ppu::Ppu};
 
-pub struct Gameboy<Model: models::GbModel> {
+pub struct Gameboy {
     pub cpu: CpuRunner,
-    pub ppu: Model::PPU,
+    pub ppu: Ppu,
     pub memory: Memory,
     pub cart: cart::Cart,
     timer: timer::Timer,
@@ -23,30 +22,11 @@ pub struct Gameboy<Model: models::GbModel> {
     interrupt_request: u8,
 }
 
-pub mod models {
-    use super::*;
-    pub trait GbModel {
-        type PPU: PPU;
-    }
-
-    /// The original Gameboy
-    pub enum DMG {}
-    impl GbModel for DMG {
-        type PPU = ppu::monochrome::MonochromePpu;
-    }
-    // /// The Gameboy Color
-    // pub enum GBC {}
-    // impl GbModel for GBC {}
-    // /// The Super Gameboy SNES Cartridge
-    // pub enum SGB {}
-    // impl GbModel for SGB {}
-}
-
-impl Gameboy<DMG> {
+impl Gameboy {
     pub fn new(rom: Vec<u8>) -> Result<Self, &'static str> {
         Ok(Gameboy {
             cpu: crate::cpu::Cpu::default().runner(),
-            ppu: ppu::monochrome::MonochromePpu::new(),
+            ppu: ppu::Ppu::new(),
             cpu_input: CpuInputPins::default(),
             memory: Memory::new(),
             cart: Cart::new(rom)?,
@@ -71,7 +51,7 @@ pub struct ClockDebug {
     pub opcode_fetched: Option<u16>,
 }
 
-impl<Model: models::GbModel> Gameboy<Model> {
+impl Gameboy {
     /// Clock the entire gameboy by M-cycle
     pub fn clock(&mut self) -> ClockDebug {
         let CpuRunnerYield {
@@ -147,36 +127,10 @@ impl<Model: models::GbModel> Gameboy<Model> {
         }
     }
 }
-impl Gameboy<DMG> {
-    /// Fetches a frame from the PPU, scales it, and returns it with its wdth and height
-    pub fn get_frame(&self, scale: impl Into<Option<usize>>) -> (Vec<u32>, usize, usize) {
-        let scale = scale.into().unwrap_or(1);
-        let frame = self.ppu.get_frame();
-        let width = frame.width * scale;
-        let height = frame.height * scale;
-        let frame = {
-            let mut new_frame = vec![0; width * height];
-
-            frame
-                .pixels
-                .chunks_exact(frame.width)
-                .enumerate()
-                .for_each(|(y, row)| {
-                    let row_offset = y * scale;
-                    for yoff in row_offset..row_offset + scale {
-                        for (x, pixel) in row.iter().enumerate() {
-                            let pix_offset = x * scale;
-                            for xoff in pix_offset..pix_offset + scale {
-                                new_frame[yoff * width + xoff] = *pixel;
-                            }
-                        }
-                    }
-                });
-
-            new_frame
-        };
-
-        (frame, width, height)
+impl Gameboy {
+    /// Fetches a frame from the PPU
+    pub fn get_frame(&self) -> ppu::frame::Frame {
+        self.ppu.get_frame()
     }
 }
 
