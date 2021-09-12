@@ -34,6 +34,8 @@ pub struct PpuState {
     stat_irq: bool,
 
     pub frame: Box<Frame>,
+    // Double-buffer the frames to prevent tearing
+    back_frame: Box<Frame>,
 }
 
 impl std::fmt::Debug for PpuState {
@@ -80,6 +82,7 @@ impl PpuState {
             stat_irq: false,
 
             frame: Box::new(Frame::new()),
+            back_frame: Box::new(Frame::new()),
         }
     }
 
@@ -130,7 +133,11 @@ impl PpuState {
         assert!(x < 160);
         assert!(y < 144);
         let color_id = color::calculate_monochrome_color_id(self.bgp, bg_pix.color);
-        self.frame[(x, y)] = color::COLORS[color_id];
+        self.back_frame[(x, y)] = color::COLORS[color_id];
+    }
+
+    fn swap_frames(&mut self) {
+        std::mem::swap(&mut self.back_frame, &mut self.frame);
     }
 }
 
@@ -277,12 +284,17 @@ pub fn gen() -> PpuGenerator {
                 state.set_mode(3);
                 // 80 cycles have passed already
                 let mut cycles = 80;
-                bg_fifo.set_tile_map_offset(state.scx as u16 / 8);
-                let mut x = 0;
+                bg_fifo.set_tile_map_offset(
+                    state.ly.wrapping_add(state.scy) as u16 / 8 * 32 + state.scx as u16 / 8,
+                );
+                // Discard the first SCX % 8 pixels
+                let mut x = -(state.scx as isize % 8);
                 while x < 160 {
                     bg_fifo.clock_bg(&mut state);
                     if let Some(pixel) = bg_fifo.pop_pixel() {
-                        state.put_pixel(pixel, x, scanline as usize);
+                        if x >= 0 {
+                            state.put_pixel(pixel, x as usize, scanline as usize);
+                        }
                         x += 1;
                     }
                     ppu_yield!();
@@ -291,7 +303,9 @@ pub fn gen() -> PpuGenerator {
                     }
                     cycles += 1;
                     if let Some(pixel) = bg_fifo.pop_pixel() {
-                        state.put_pixel(pixel, x, scanline as usize);
+                        if x >= 0 {
+                            state.put_pixel(pixel, x as usize, scanline as usize);
+                        }
                         x += 1;
                     }
                     ppu_yield!();
@@ -309,12 +323,15 @@ pub fn gen() -> PpuGenerator {
 
             // VBlank
             state.set_mode(1);
+            state.swap_frames();
+            state.vblank_irq = true;
             for scanline in 144..154 {
                 state.set_ly(scanline);
                 for _dot in 0..456 {
                     ppu_yield!()
                 }
             }
+            state.vblank_irq = false;
         }
     })
 }
