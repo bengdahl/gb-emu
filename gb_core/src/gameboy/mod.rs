@@ -129,7 +129,7 @@ impl Gameboy {
 }
 impl Gameboy {
     /// Fetches a frame from the PPU
-    pub fn get_frame(&self) -> ppu::frame::Frame {
+    pub fn get_frame(&self) -> Box<ppu::frame::Frame> {
         self.ppu.get_frame()
     }
 }

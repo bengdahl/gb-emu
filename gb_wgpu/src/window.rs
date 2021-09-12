@@ -10,7 +10,7 @@ use winit::{
 
 #[derive(Debug)]
 pub enum ViewEvent {
-    GameboyFrame { frame: Frame },
+    GameboyFrame { frame: Box<Frame> },
 }
 
 #[derive(Debug)]
@@ -81,6 +81,12 @@ impl ViewSetup {
                     } => match (state, key) {
                         (ElementState::Pressed, VirtualKeyCode::P) => {
                             println!("Ping!");
+                        }
+                        (ElementState::Pressed, VirtualKeyCode::B) => {
+                            pixels_ctx
+                                .get_frame()
+                                .chunks_mut(4)
+                                .for_each(|pix| pix.copy_from_slice(&[0xFF, 0x00, 0x00, 0xFF]));
                         }
                         (state, key) if keycode_to_joypad(key).is_some() => smol::block_on(async {
                             let button = keycode_to_joypad(key).unwrap();

@@ -65,7 +65,12 @@ fn ppu_bgp() {
         for color in 0..=3 {
             let i = color as usize * 8; // 8 pixel wide tiles
             assert_eq!(
-                frame[(i, 0)],
+                frame[i],
+                color::COLORS[color::calculate_monochrome_color_id(bgp, color)],
+                "\nBGP: {:#04b}\nraw color: {:#04b}\nExpected color: {:#X}\nActual color: {:#X}",
+                bgp,
+                color,
+                frame[i],
                 color::COLORS[color::calculate_monochrome_color_id(bgp, color)]
             );
         }

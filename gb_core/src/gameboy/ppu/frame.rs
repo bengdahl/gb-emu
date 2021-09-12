@@ -46,3 +46,16 @@ impl IndexMut<(usize, usize)> for Frame {
         &mut self.pixels[y * 160 + x]
     }
 }
+
+impl Index<usize> for Frame {
+    type Output = RgbaColor;
+    fn index(&self, i: usize) -> &Self::Output {
+        &self.pixels[i]
+    }
+}
+
+impl IndexMut<usize> for Frame {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.pixels[index]
+    }
+}

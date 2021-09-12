@@ -9,4 +9,3 @@ edition = "2018"
 [dependencies]
 paste = "1.0.4"
 bitflags = "1.2"
-ghost-cell = "0.2.2"

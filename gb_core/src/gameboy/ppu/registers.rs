@@ -1,5 +1,23 @@
 use bitflags::bitflags;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct OamEntry {
+    pub ypos: u8,
+    pub xpos: u8,
+    pub tile: u8,
+    pub flags: OamEntryFlags,
+}
+
+bitflags! {
+    #[derive(Default)]
+    pub struct OamEntryFlags: u8 {
+        const BG_PRIORITY = 0x80;
+        const Y_FLIP = 0x40;
+        const X_FLIP = 0x20;
+        const PALETTE_OBP1 = 0x10;
+    }
+}
+
 bitflags! {
     pub struct LCDC: u8 {
         const LCD_ENABLE = 0x80;
@@ -37,7 +55,7 @@ bitflags! {
 }
 
 impl STAT {
-    pub const MODE_BITMASK: STAT = STAT { bits: 0xFC };
+    const MODE_BITMASK: STAT = STAT { bits: 0xFC };
 
     #[inline]
     pub fn set_mode(&mut self, mode: Self) {
@@ -48,5 +66,11 @@ impl STAT {
         );
         *self &= Self::MODE_BITMASK;
         *self |= mode;
+    }
+
+    /// Masks out all bits except for the mode bits in order to make matching easier
+    #[inline]
+    pub fn mode(&self) -> Self {
+        *self & !Self::MODE_BITMASK
     }
 }
