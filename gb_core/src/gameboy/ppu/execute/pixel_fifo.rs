@@ -2,7 +2,7 @@ use super::PpuState;
 
 pub struct PixelFifo {
     pixels: ShiftRegister<Pixel, 16>,
-    tile_map_offset: u16,
+    tile_map_offset: TileMapOffset,
     state: FifoState,
 }
 
@@ -10,16 +10,16 @@ impl PixelFifo {
     pub fn new() -> Self {
         Self {
             pixels: ShiftRegister::new(),
-            tile_map_offset: 0,
+            tile_map_offset: TileMapOffset::Bg(0),
             state: FifoState::FetchTile,
         }
     }
 
-    pub fn set_tile_map_offset(&mut self, tile_map_offset: u16) {
+    pub fn set_tile_map_offset(&mut self, tile_map_offset: TileMapOffset) {
         self.tile_map_offset = tile_map_offset;
     }
 
-    pub fn hblank(&mut self) {
+    pub fn clear(&mut self) {
         self.pixels.clear();
         self.state = FifoState::FetchTile;
     }
@@ -29,7 +29,10 @@ impl PixelFifo {
         match self.state {
             FifoState::FetchTile => {
                 self.state = FifoState::FetchTileDataLow {
-                    tile_no: state.get_bg_tile_number(self.tile_map_offset),
+                    tile_no: match self.tile_map_offset {
+                        TileMapOffset::Bg(off) => state.get_bg_tile_number(off),
+                        TileMapOffset::Window(off, _) => state.get_window_tile_number(off),
+                    },
                 }
             }
 
@@ -38,7 +41,10 @@ impl PixelFifo {
                     tile_no,
                     tile_data_low: {
                         let tile_addr = state.tile_data_address(tile_no);
-                        let tile_data_offset = 2 * ((state.ly + state.scy) % 8) as usize;
+                        let tile_data_offset = match self.tile_map_offset {
+                            TileMapOffset::Bg(_) => 2 * ((state.ly + state.scy) % 8) as usize,
+                            TileMapOffset::Window(_, window_line) => 2 * (window_line % 8) as usize,
+                        };
                         state.tile_data[tile_addr + tile_data_offset]
                     },
                 }
@@ -52,7 +58,10 @@ impl PixelFifo {
                     tile_data_low,
                     tile_data_high: {
                         let tile_addr = state.tile_data_address(tile_no);
-                        let tile_data_offset = 2 * ((state.ly + state.scy) % 8) as usize;
+                        let tile_data_offset = match self.tile_map_offset {
+                            TileMapOffset::Bg(_) => 2 * ((state.ly + state.scy) % 8) as usize,
+                            TileMapOffset::Window(_, window_line) => 2 * (window_line % 8) as usize,
+                        };
                         state.tile_data[tile_addr + tile_data_offset + 1]
                     },
                 }
@@ -71,7 +80,7 @@ impl PixelFifo {
                             ..Default::default()
                         });
                     }
-                    self.tile_map_offset += 1;
+                    self.tile_map_offset.increment();
                     self.state = FifoState::FetchTile;
                 }
             }
@@ -83,6 +92,25 @@ impl PixelFifo {
             self.pixels.pop()
         } else {
             None
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TileMapOffset {
+    Bg(u16),
+    Window(u16, u8),
+}
+
+impl TileMapOffset {
+    fn increment(&mut self) {
+        match self {
+            TileMapOffset::Bg(ref mut off) => {
+                *off += 1;
+            }
+            TileMapOffset::Window(ref mut off, _) => {
+                *off += 1;
+            }
         }
     }
 }

@@ -108,12 +108,24 @@ impl PpuState {
         }
     }
 
-    /// Return the tile data at the given offset, taking into account the addressing mode
+    /// Return the BG tile data at the given offset, taking into account the addressing mode
     ///
     /// # Panics
     /// Panics if `offset` >= 0x400
     fn get_bg_tile_number(&self, offset: u16) -> u8 {
         if self.lcdc.contains(LCDC::BG_TILEMAP_AREA) {
+            self.bg_map_2[offset as usize]
+        } else {
+            self.bg_map_1[offset as usize]
+        }
+    }
+
+    /// Return the window tile data at the given offset, taking into account the addressing mode
+    ///
+    /// # Panics
+    /// Panics if `offset` >= 0x400
+    fn get_window_tile_number(&self, offset: u16) -> u8 {
+        if self.lcdc.contains(LCDC::WINDOW_TILEMAP_AREA) {
             self.bg_map_2[offset as usize]
         } else {
             self.bg_map_1[offset as usize]
@@ -258,8 +270,15 @@ pub fn gen() -> PpuGenerator {
 
         loop {
             let mut bg_fifo = pixel_fifo::PixelFifo::new();
+            // The window is rendered if ly==wy at any point during the frame
+            let mut wy_passed = false;
+            // Number of completed scanlines containing any window pixels
+            let mut window_lines = 0;
             for scanline in 0..144 {
                 state.set_ly(scanline);
+                if state.ly == state.wy {
+                    wy_passed = true;
+                }
 
                 // OAM Search
                 state.set_mode(2);
@@ -284,37 +303,45 @@ pub fn gen() -> PpuGenerator {
                 state.set_mode(3);
                 // 80 cycles have passed already
                 let mut cycles = 80;
-                bg_fifo.set_tile_map_offset(
+                bg_fifo.set_tile_map_offset(pixel_fifo::TileMapOffset::Bg(
                     state.ly.wrapping_add(state.scy) as u16 / 8 * 32 + state.scx as u16 / 8,
-                );
+                ));
                 // Discard the first SCX % 8 pixels
                 let mut x = -(state.scx as isize % 8);
+                let mut inside_window = false;
                 while x < 160 {
-                    bg_fifo.clock_bg(&mut state);
+                    if cycles % 2 == 0 {
+                        bg_fifo.clock_bg(&mut state);
+                    }
                     if let Some(pixel) = bg_fifo.pop_pixel() {
                         if x >= 0 {
                             state.put_pixel(pixel, x as usize, scanline as usize);
                         }
-                        x += 1;
-                    }
-                    ppu_yield!();
-                    if x >= 160 {
-                        break;
-                    }
-                    cycles += 1;
-                    if let Some(pixel) = bg_fifo.pop_pixel() {
-                        if x >= 0 {
-                            state.put_pixel(pixel, x as usize, scanline as usize);
+                        // Check if we're about to enter the window
+                        if state.lcdc.contains(LCDC::WINDOW_ENABLE)
+                            && wy_passed
+                            && x >= state.wx as isize - 7
+                            && !inside_window
+                        {
+                            bg_fifo.clear();
+                            bg_fifo.set_tile_map_offset(pixel_fifo::TileMapOffset::Window(
+                                window_lines / 8 * 32,
+                                window_lines as u8,
+                            ));
+                            inside_window = true;
                         }
                         x += 1;
                     }
                     ppu_yield!();
                     cycles += 1;
                 }
+                if wy_passed {
+                    window_lines += 1;
+                }
 
                 // HBlank
                 state.set_mode(0);
-                bg_fifo.hblank();
+                bg_fifo.clear();
                 while cycles < 456 {
                     ppu_yield!();
                     cycles += 1;
