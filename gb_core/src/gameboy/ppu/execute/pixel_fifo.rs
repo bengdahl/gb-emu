@@ -81,10 +81,12 @@ impl BgPixelFifo {
                     for bit in (0..8).rev() {
                         let pix_low = (tile_data_low >> bit) & 1;
                         let pix_high = (tile_data_high >> bit) & 1;
-                        let _ = self.pixels.push(Pixel {
-                            color: (pix_high << 1) | pix_low,
-                            ..Default::default()
-                        });
+                        self.pixels
+                            .push(Pixel {
+                                color: (pix_high << 1) | pix_low,
+                                ..Default::default()
+                            })
+                            .unwrap();
                     }
                     self.tile_map_offset.increment();
                     self.state = FifoState::FetchTile;
@@ -207,7 +209,7 @@ impl SpritePixelFifo {
                             *pix = prepared_pixel;
                         }
                     } else {
-                        self.pixels.push(prepared_pixel);
+                        self.pixels.push(prepared_pixel).unwrap();
                     }
                 }
 
@@ -217,8 +219,12 @@ impl SpritePixelFifo {
         }
     }
 
-    pub fn pop_pixel(&mut self) -> Option<Pixel> {
-        self.pixels.pop()
+    pub fn pop_pixel(&mut self) -> Pixel {
+        // Output a transparent pixel if the fifo is empty
+        self.pixels.pop().unwrap_or(Pixel {
+            color: 0,
+            ..Default::default()
+        })
     }
 }
 
@@ -237,7 +243,7 @@ enum FifoState {
     },
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Pixel {
     /// Pixel color (palette index)
     pub color: u8,

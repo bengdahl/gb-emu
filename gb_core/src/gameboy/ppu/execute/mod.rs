@@ -146,10 +146,24 @@ impl PpuState {
         tile_no as usize * 16
     }
 
-    fn put_pixel(&mut self, bg_pix: Pixel, x: usize, y: usize) {
+    fn put_pixel(&mut self, bg_pix: Pixel, sprite_pix: Pixel, x: usize, y: usize) {
         assert!(x < 160);
         assert!(y < 144);
-        let color_id = color::calculate_monochrome_color_id(self.bgp, bg_pix.color);
+        let color_id = if sprite_pix.color == 0 {
+            // If the sprite pixel is transparent, draw the BG pixel
+            color::calculate_monochrome_color_id(self.bgp, bg_pix.color)
+        } else if sprite_pix.bg_priority && bg_pix.color != 0 {
+            // If the sprite has BG priority and the background color is not 0, draw the BG pixel
+            color::calculate_monochrome_color_id(self.bgp, bg_pix.color)
+        } else {
+            // Otherwise, draw the sprite pixel
+            let palette = if sprite_pix.palette == 0 {
+                self.obp0
+            } else {
+                self.obp1
+            };
+            color::calculate_monochrome_color_id(palette, sprite_pix.color)
+        };
         self.back_frame[(x, y)] = color::COLORS[color_id];
     }
 
@@ -323,9 +337,10 @@ pub fn gen() -> PpuGenerator {
                         bg_fifo.clock(&mut state);
                     }
 
-                    if let Some(pixel) = bg_fifo.pop_pixel() {
+                    if let Some(bg_pixel) = bg_fifo.pop_pixel() {
+                        let sprite_pixel = sprite_fifo.pop_pixel();
                         if x >= 0 {
-                            state.put_pixel(pixel, x as usize, scanline as usize);
+                            state.put_pixel(bg_pixel, sprite_pixel, x as usize, scanline as usize);
                         }
                         // Check if we're about to enter the window
                         if state.lcdc.contains(LCDC::WINDOW_ENABLE)
