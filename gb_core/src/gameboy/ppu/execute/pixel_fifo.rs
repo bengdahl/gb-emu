@@ -1,12 +1,14 @@
+use crate::gameboy::ppu::registers::OamEntry;
+
 use super::PpuState;
 
-pub struct PixelFifo {
+pub struct BgPixelFifo {
     pixels: ShiftRegister<Pixel, 16>,
     tile_map_offset: TileMapOffset,
     state: FifoState,
 }
 
-impl PixelFifo {
+impl BgPixelFifo {
     pub fn new() -> Self {
         Self {
             pixels: ShiftRegister::new(),
@@ -24,8 +26,12 @@ impl PixelFifo {
         self.state = FifoState::FetchTile;
     }
 
+    pub fn reset_fetcher(&mut self) {
+        self.state = FifoState::FetchTile;
+    }
+
     /// Each FIFO cycle takes 2 PPU cycles
-    pub fn clock_bg(&mut self, state: &PpuState) {
+    pub fn clock(&mut self, state: &PpuState) {
         match self.state {
             FifoState::FetchTile => {
                 self.state = FifoState::FetchTileDataLow {
@@ -40,7 +46,7 @@ impl PixelFifo {
                 self.state = FifoState::FetchTileDataHigh {
                     tile_no,
                     tile_data_low: {
-                        let tile_addr = state.tile_data_address(tile_no);
+                        let tile_addr = state.bg_tile_data_address(tile_no);
                         let tile_data_offset = match self.tile_map_offset {
                             TileMapOffset::Bg(_) => 2 * ((state.ly + state.scy) % 8) as usize,
                             TileMapOffset::Window(_, window_line) => 2 * (window_line % 8) as usize,
@@ -57,7 +63,7 @@ impl PixelFifo {
                 self.state = FifoState::ReadyToPush {
                     tile_data_low,
                     tile_data_high: {
-                        let tile_addr = state.tile_data_address(tile_no);
+                        let tile_addr = state.bg_tile_data_address(tile_no);
                         let tile_data_offset = match self.tile_map_offset {
                             TileMapOffset::Bg(_) => 2 * ((state.ly + state.scy) % 8) as usize,
                             TileMapOffset::Window(_, window_line) => 2 * (window_line % 8) as usize,
@@ -112,6 +118,107 @@ impl TileMapOffset {
                 *off += 1;
             }
         }
+    }
+}
+
+pub struct SpritePixelFifo {
+    pixels: ShiftRegister<Pixel, 8>,
+    sprite: Option<super::OamEntry>,
+    state: FifoState,
+}
+
+impl SpritePixelFifo {
+    pub fn new() -> Self {
+        SpritePixelFifo {
+            pixels: ShiftRegister::new(),
+            sprite: None,
+            state: FifoState::FetchTile,
+        }
+    }
+
+    pub fn load_sprite(&mut self, sprite: OamEntry) {
+        self.sprite = Some(sprite);
+    }
+
+    pub fn clock(&mut self, state: &mut PpuState) {
+        match self.state {
+            FifoState::FetchTile => match self.sprite {
+                None => (),
+                Some(sprite) => {
+                    self.state = FifoState::FetchTileDataLow {
+                        tile_no: sprite.tile,
+                    }
+                }
+            },
+
+            FifoState::FetchTileDataLow { tile_no } => {
+                self.state = FifoState::FetchTileDataHigh {
+                    tile_no,
+                    tile_data_low: state.tile_data[state.sprite_tile_data_address(tile_no)
+                        + 2 * (state.ly - self.sprite.unwrap().ypos) as usize],
+                }
+            }
+
+            FifoState::FetchTileDataHigh {
+                tile_no,
+                tile_data_low,
+            } => {
+                self.state = FifoState::ReadyToPush {
+                    tile_data_low,
+                    tile_data_high: state.tile_data[state.sprite_tile_data_address(tile_no)
+                        + 2 * (state.ly - self.sprite.unwrap().ypos) as usize
+                        + 1],
+                }
+            }
+
+            FifoState::ReadyToPush {
+                tile_data_low,
+                tile_data_high,
+            } => {
+                for i in 0..8 {
+                    let pix_low = (tile_data_low >> i) & 1;
+                    let pix_high = (tile_data_high >> i) & 1;
+                    let prepared_pixel = Pixel {
+                        color: (pix_high << 1) | pix_low,
+                        palette: if self
+                            .sprite
+                            .unwrap()
+                            .flags
+                            .contains(super::OamEntryFlags::PALETTE_OBP1)
+                        {
+                            1
+                        } else {
+                            0
+                        },
+                        bg_priority: self
+                            .sprite
+                            .unwrap()
+                            .flags
+                            .contains(super::OamEntryFlags::BG_PRIORITY),
+                        sprite_priority: false,
+                    };
+
+                    // Avoid drawing on top of already visible sprite pixels
+                    if let Some(pix) = self.pixels.get_mut(i) {
+                        if pix.color != 0b00 {
+                            continue;
+                        } else {
+                            // If the pixel is transparent, we can still overwrite it
+                            *pix = prepared_pixel;
+                        }
+                    } else {
+                        self.pixels.push(prepared_pixel);
+                    }
+                }
+
+                self.state = FifoState::FetchTile;
+                self.sprite = None;
+            }
+        }
+    }
+
+    pub fn pop_pixel(&mut self) -> Option<Pixel> {
+        self.pixels.pop()
     }
 }
 
@@ -191,6 +298,13 @@ impl<T: Default + Clone + Copy, const N: usize> ShiftRegister<T, N> {
         self.i = (self.i + 1) % N;
         self.len -= 1;
         Some(r)
+    }
+
+    fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        if index >= self.len {
+            return None;
+        }
+        Some(&mut self.data[(self.i + index) % N])
     }
 
     fn clear(&mut self) {

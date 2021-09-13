@@ -132,13 +132,18 @@ impl PpuState {
         }
     }
 
-    /// Return the index of the first byte of the tile data for tile `n`
-    fn tile_data_address(&self, tile_no: u8) -> usize {
+    /// Return the index of the first byte of the tile data for tile `n`, using the appropriate BG tile data addressing mode
+    fn bg_tile_data_address(&self, tile_no: u8) -> usize {
         if self.lcdc.contains(LCDC::BG_TILE_DATA_AREA) {
             tile_no as usize * 16
         } else {
             0x1000 + (tile_no as i8 as i16 * 16) as usize
         }
+    }
+
+    /// Return the index of the first byte of the tile data for tile `n`, using 0x8000 addressing mode for sprites
+    fn sprite_tile_data_address(&self, tile_no: u8) -> usize {
+        tile_no as usize * 16
     }
 
     fn put_pixel(&mut self, bg_pix: Pixel, x: usize, y: usize) {
@@ -269,7 +274,7 @@ pub fn gen() -> PpuGenerator {
         }
 
         loop {
-            let mut bg_fifo = pixel_fifo::PixelFifo::new();
+            let mut bg_fifo = pixel_fifo::BgPixelFifo::new();
             // The window is rendered if ly==wy at any point during the frame
             let mut wy_passed = false;
             // Number of completed scanlines containing any window pixels
@@ -282,7 +287,10 @@ pub fn gen() -> PpuGenerator {
 
                 // OAM Search
                 state.set_mode(2);
-                let mut sprite_buffer = [OamEntry::default(); 10];
+                let mut sprite_buffer = [OamEntry {
+                    xpos: 255,
+                    ..Default::default()
+                }; 10];
                 let mut sprite_buffer_len = 0;
                 for entry in 0..40 {
                     if sprite_buffer_len < 10 {
@@ -306,13 +314,15 @@ pub fn gen() -> PpuGenerator {
                 bg_fifo.set_tile_map_offset(pixel_fifo::TileMapOffset::Bg(
                     state.ly.wrapping_add(state.scy) as u16 / 8 * 32 + state.scx as u16 / 8,
                 ));
+                let mut sprite_fifo = pixel_fifo::SpritePixelFifo::new();
                 // Discard the first SCX % 8 pixels
                 let mut x = -(state.scx as isize % 8);
                 let mut inside_window = false;
                 while x < 160 {
                     if cycles % 2 == 0 {
-                        bg_fifo.clock_bg(&mut state);
+                        bg_fifo.clock(&mut state);
                     }
+
                     if let Some(pixel) = bg_fifo.pop_pixel() {
                         if x >= 0 {
                             state.put_pixel(pixel, x as usize, scanline as usize);
@@ -329,6 +339,24 @@ pub fn gen() -> PpuGenerator {
                                 window_lines as u8,
                             ));
                             inside_window = true;
+                        }
+                        // Check if any sprites are about to be drawn
+                        if let Some(sprite) = sprite_buffer
+                            .iter_mut()
+                            .find(|sprite| sprite.xpos as isize <= x + 8)
+                        {
+                            // Pause and reset the BG fetcher, and load the sprite into the sprite fetcher
+                            bg_fifo.reset_fetcher();
+                            sprite_fifo.load_sprite(*sprite);
+                            // Move the sprite offscreen to prevent it from being redrawn
+                            sprite.xpos = 255;
+                            // Perform the sprite fetch
+                            for fetch_cycle in 0..6 {
+                                if fetch_cycle % 2 == 0 {
+                                    sprite_fifo.clock(&mut state);
+                                }
+                                ppu_yield!()
+                            }
                         }
                         x += 1;
                     }
