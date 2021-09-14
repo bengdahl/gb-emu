@@ -91,6 +91,13 @@ impl Ppu {
 
         (image, IMAGE_WIDTH * scale, IMAGE_HEIGHT * scale)
     }
+
+    pub fn dma_active(&self) -> bool {
+        match self.dma_transfer {
+            execute::DmaState::Inactive => false,
+            execute::DmaState::Active { .. } | execute::DmaState::ActiveFirstRead { .. } => true,
+        }
+    }
 }
 
 impl Ppu {

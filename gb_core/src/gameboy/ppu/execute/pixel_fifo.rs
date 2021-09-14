@@ -4,7 +4,7 @@ use super::PpuState;
 
 pub struct BgPixelFifo {
     pixels: ShiftRegister<Pixel, 16>,
-    tile_map_offset: TileMapOffset,
+    tile_map_offset: TileCounter,
     state: FifoState,
 }
 
@@ -12,22 +12,22 @@ impl BgPixelFifo {
     pub fn new() -> Self {
         Self {
             pixels: ShiftRegister::new(),
-            tile_map_offset: TileMapOffset::Bg(0),
+            tile_map_offset: TileCounter::Bg { x_counter: 0 },
             state: FifoState::FetchTile,
         }
     }
 
-    pub fn set_tile_map_offset(&mut self, tile_map_offset: TileMapOffset) {
+    pub fn set_tile_map_offset(&mut self, tile_map_offset: TileCounter) {
         self.tile_map_offset = tile_map_offset;
-    }
-
-    pub fn clear(&mut self) {
-        self.pixels.clear();
-        self.state = FifoState::FetchTile;
     }
 
     pub fn reset_fetcher(&mut self) {
         self.state = FifoState::FetchTile;
+    }
+
+    pub fn clear(&mut self) {
+        self.reset_fetcher();
+        self.pixels.clear();
     }
 
     /// Each FIFO cycle takes 2 PPU cycles
@@ -35,10 +35,7 @@ impl BgPixelFifo {
         match self.state {
             FifoState::FetchTile => {
                 self.state = FifoState::FetchTileDataLow {
-                    tile_no: match self.tile_map_offset {
-                        TileMapOffset::Bg(off) => state.get_bg_tile_number(off),
-                        TileMapOffset::Window(off, _) => state.get_window_tile_number(off),
-                    },
+                    tile_no: self.tile_map_offset.get_tile_number(state),
                 }
             }
 
@@ -48,8 +45,10 @@ impl BgPixelFifo {
                     tile_data_low: {
                         let tile_addr = state.bg_tile_data_address(tile_no);
                         let tile_data_offset = match self.tile_map_offset {
-                            TileMapOffset::Bg(_) => 2 * ((state.ly + state.scy) % 8) as usize,
-                            TileMapOffset::Window(_, window_line) => 2 * (window_line % 8) as usize,
+                            TileCounter::Bg { .. } => 2 * ((state.ly + state.scy) % 8) as usize,
+                            TileCounter::Window { window_line, .. } => {
+                                2 * (window_line % 8) as usize
+                            }
                         };
                         state.tile_data[tile_addr + tile_data_offset]
                     },
@@ -65,8 +64,10 @@ impl BgPixelFifo {
                     tile_data_high: {
                         let tile_addr = state.bg_tile_data_address(tile_no);
                         let tile_data_offset = match self.tile_map_offset {
-                            TileMapOffset::Bg(_) => 2 * ((state.ly + state.scy) % 8) as usize,
-                            TileMapOffset::Window(_, window_line) => 2 * (window_line % 8) as usize,
+                            TileCounter::Bg { .. } => 2 * ((state.ly + state.scy) % 8) as usize,
+                            TileCounter::Window { window_line, .. } => {
+                                2 * (window_line % 8) as usize
+                            }
                         };
                         state.tile_data[tile_addr + tile_data_offset + 1]
                     },
@@ -105,19 +106,33 @@ impl BgPixelFifo {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TileMapOffset {
-    Bg(u16),
-    Window(u16, u8),
+pub enum TileCounter {
+    Bg { x_counter: u16 },
+    Window { x_counter: u16, window_line: u16 },
 }
 
-impl TileMapOffset {
+impl TileCounter {
+    fn get_tile_number(&self, state: &PpuState) -> u8 {
+        match self {
+            &TileCounter::Bg { x_counter } => state.get_bg_tile_number(
+                state.ly.wrapping_add(state.scy) as u16 / 8 * 32 + state.scx as u16 / 8 + x_counter,
+            ),
+            &TileCounter::Window {
+                x_counter,
+                window_line,
+            } => state.get_window_tile_number(window_line / 8 * 32 + x_counter),
+        }
+    }
+
     fn increment(&mut self) {
         match self {
-            TileMapOffset::Bg(ref mut off) => {
-                *off += 1;
+            TileCounter::Bg { ref mut x_counter } => {
+                *x_counter += 1;
             }
-            TileMapOffset::Window(ref mut off, _) => {
-                *off += 1;
+            TileCounter::Window {
+                ref mut x_counter, ..
+            } => {
+                *x_counter += 1;
             }
         }
     }
@@ -154,23 +169,25 @@ impl SpritePixelFifo {
             },
 
             FifoState::FetchTileDataLow { tile_no } => {
+                let tile_index = state.sprite_tile_data_address(tile_no)
+                    + 2 * (state.ly - self.sprite.unwrap().ypos + 16) as usize;
                 self.state = FifoState::FetchTileDataHigh {
                     tile_no,
-                    tile_data_low: state.tile_data[state.sprite_tile_data_address(tile_no)
-                        + 2 * (state.ly - self.sprite.unwrap().ypos) as usize],
-                }
+                    tile_data_low: state.tile_data[tile_index],
+                };
             }
 
             FifoState::FetchTileDataHigh {
                 tile_no,
                 tile_data_low,
             } => {
+                let tile_index = state.sprite_tile_data_address(tile_no)
+                    + 2 * (state.ly - self.sprite.unwrap().ypos + 16) as usize
+                    + 1;
                 self.state = FifoState::ReadyToPush {
                     tile_data_low,
-                    tile_data_high: state.tile_data[state.sprite_tile_data_address(tile_no)
-                        + 2 * (state.ly - self.sprite.unwrap().ypos) as usize
-                        + 1],
-                }
+                    tile_data_high: state.tile_data[tile_index],
+                };
             }
 
             FifoState::ReadyToPush {
@@ -178,8 +195,8 @@ impl SpritePixelFifo {
                 tile_data_high,
             } => {
                 for i in 0..8 {
-                    let pix_low = (tile_data_low >> i) & 1;
-                    let pix_high = (tile_data_high >> i) & 1;
+                    let pix_low = (tile_data_low >> (7 - i)) & 1;
+                    let pix_high = (tile_data_high >> (7 - i)) & 1;
                     let prepared_pixel = Pixel {
                         color: (pix_high << 1) | pix_low,
                         palette: if self

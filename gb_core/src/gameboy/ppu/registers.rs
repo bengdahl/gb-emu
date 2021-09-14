@@ -1,11 +1,22 @@
 use bitflags::bitflags;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub struct OamEntry {
     pub ypos: u8,
     pub xpos: u8,
     pub tile: u8,
     pub flags: OamEntryFlags,
+}
+
+impl std::fmt::Debug for OamEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OamEntry")
+            .field("ypos", &self.ypos)
+            .field("xpos", &self.xpos)
+            .field("tile", &format_args!("{:#X}", &self.tile))
+            .field("flags", &self.flags)
+            .finish()
+    }
 }
 
 bitflags! {

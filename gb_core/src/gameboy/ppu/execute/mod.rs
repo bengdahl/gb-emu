@@ -1,6 +1,9 @@
 mod pixel_fifo;
 
-use crate::{cpu::CpuOutputPins, gameboy::ppu::color};
+use crate::{
+    cpu::{CpuInputPins, CpuOutputPins},
+    gameboy::ppu::color,
+};
 
 use self::pixel_fifo::Pixel;
 
@@ -36,6 +39,9 @@ pub struct PpuState {
     pub frame: Box<Frame>,
     // Double-buffer the frames to prevent tearing
     back_frame: Box<Frame>,
+
+    /// Indicates a DMA transfer in progress, and the next address to read.
+    pub dma_transfer: DmaState,
 }
 
 impl std::fmt::Debug for PpuState {
@@ -83,6 +89,8 @@ impl PpuState {
 
             frame: Box::new(Frame::new()),
             back_frame: Box::new(Frame::new()),
+
+            dma_transfer: DmaState::Inactive,
         }
     }
 
@@ -227,7 +235,12 @@ impl PpuState {
                 0xFF43 => self.scx = v,
                 0xFF44 => self.ly = v,
                 0xFF45 => self.lyc = v,
-                0xFF46 => (),
+                // Begin an OAM DMA transfer
+                0xFF46 => {
+                    self.dma_transfer = DmaState::ActiveFirstRead {
+                        addr: v as u16 * 0x100,
+                    }
+                }
                 0xFF47 => self.bgp = v,
                 0xFF48 => self.obp0 = v,
                 0xFF49 => self.obp1 = v,
@@ -248,7 +261,14 @@ impl PpuState {
                 0xFF43 => *data = self.scx,
                 0xFF44 => *data = self.ly,
                 0xFF45 => *data = self.lyc,
-                0xFF46 => *data = 0,
+                0xFF46 => {
+                    *data = match self.dma_transfer {
+                        DmaState::Active { addr } | DmaState::ActiveFirstRead { addr } => {
+                            (addr / 0x100) as u8
+                        }
+                        DmaState::Inactive => 0,
+                    }
+                }
                 0xFF47 => *data = self.bgp,
                 0xFF48 => *data = self.obp0,
                 0xFF49 => *data = self.obp1,
@@ -274,6 +294,38 @@ impl PpuState {
 
         *interrupt_request = irq;
     }
+
+    /// During a DMA transfer, read in the next byte from memory.
+    ///
+    /// # Panics
+    /// Panics if there is not an active DMA transfer
+    pub fn clock_dma(&mut self, input: CpuInputPins) -> CpuOutputPins {
+        match self.dma_transfer {
+            DmaState::Inactive => unreachable!(),
+            DmaState::ActiveFirstRead { addr } => {
+                self.dma_transfer = DmaState::Active { addr };
+                CpuOutputPins::Read { addr }
+            }
+            DmaState::Active { addr } => {
+                let i = (addr % 0x100) as usize;
+                self.oam[i] = input.data;
+                if i == 0x9F {
+                    self.dma_transfer = DmaState::Inactive;
+                    CpuOutputPins::Read { addr: 0 }
+                } else {
+                    self.dma_transfer = DmaState::Active { addr: addr + 1 };
+                    CpuOutputPins::Read { addr: addr + 1 }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum DmaState {
+    Inactive,
+    ActiveFirstRead { addr: u16 },
+    Active { addr: u16 },
 }
 
 pub type PpuGenerator =
@@ -288,7 +340,6 @@ pub fn gen() -> PpuGenerator {
         }
 
         loop {
-            let mut bg_fifo = pixel_fifo::BgPixelFifo::new();
             // The window is rendered if ly==wy at any point during the frame
             let mut wy_passed = false;
             // Number of completed scanlines containing any window pixels
@@ -325,9 +376,8 @@ pub fn gen() -> PpuGenerator {
                 state.set_mode(3);
                 // 80 cycles have passed already
                 let mut cycles = 80;
-                bg_fifo.set_tile_map_offset(pixel_fifo::TileMapOffset::Bg(
-                    state.ly.wrapping_add(state.scy) as u16 / 8 * 32 + state.scx as u16 / 8,
-                ));
+                let mut bg_fifo = pixel_fifo::BgPixelFifo::new();
+                bg_fifo.set_tile_map_offset(pixel_fifo::TileCounter::Bg { x_counter: 0 });
                 let mut sprite_fifo = pixel_fifo::SpritePixelFifo::new();
                 // Discard the first SCX % 8 pixels
                 let mut x = -(state.scx as isize % 8);
@@ -349,12 +399,13 @@ pub fn gen() -> PpuGenerator {
                             && !inside_window
                         {
                             bg_fifo.clear();
-                            bg_fifo.set_tile_map_offset(pixel_fifo::TileMapOffset::Window(
-                                window_lines / 8 * 32,
-                                window_lines as u8,
-                            ));
+                            bg_fifo.set_tile_map_offset(pixel_fifo::TileCounter::Window {
+                                x_counter: 0,
+                                window_line: window_lines,
+                            });
                             inside_window = true;
                         }
+                        x += 1;
                         // Check if any sprites are about to be drawn
                         if let Some(sprite) = sprite_buffer
                             .iter_mut()
@@ -366,14 +417,11 @@ pub fn gen() -> PpuGenerator {
                             // Move the sprite offscreen to prevent it from being redrawn
                             sprite.xpos = 255;
                             // Perform the sprite fetch
-                            for fetch_cycle in 0..6 {
-                                if fetch_cycle % 2 == 0 {
-                                    sprite_fifo.clock(&mut state);
-                                }
+                            for _ in 0..6 {
+                                sprite_fifo.clock(&mut state);
                                 ppu_yield!()
                             }
                         }
-                        x += 1;
                     }
                     ppu_yield!();
                     cycles += 1;
@@ -384,7 +432,6 @@ pub fn gen() -> PpuGenerator {
 
                 // HBlank
                 state.set_mode(0);
-                bg_fifo.clear();
                 while cycles < 456 {
                     ppu_yield!();
                     cycles += 1;

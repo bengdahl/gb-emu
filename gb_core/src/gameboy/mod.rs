@@ -54,6 +54,11 @@ pub struct ClockDebug {
 impl Gameboy {
     /// Clock the entire gameboy by M-cycle
     pub fn clock(&mut self) -> ClockDebug {
+        if self.ppu.dma_active() {
+            // If there is a DMA operation, we'll just pause the CPU during it since most games won't care.
+            return self.clock_dma();
+        };
+
         let CpuRunnerYield {
             pins: cpu_pins_out,
             is_fetch_cycle,
@@ -111,6 +116,39 @@ impl Gameboy {
         ClockDebug {
             is_fetch_cycle,
             opcode_fetched,
+        }
+    }
+
+    fn clock_dma(&mut self) -> ClockDebug {
+        for _ in 0..4 {
+            if !self.ppu.dma_active() {
+                break;
+            }
+
+            let pins = self.ppu.clock_dma(self.cpu_input);
+
+            let chips = [
+                &mut self.memory as &mut dyn Chip,
+                &mut self.cart,
+                &mut self.timer,
+                &mut self.joypad,
+                &mut self.ppu,
+            ];
+            let mut data = 0;
+            let mut ir = self.interrupt_request;
+            for chip in chips {
+                chip.clock(pins, &mut data, &mut ir);
+            }
+
+            self.cpu_input = CpuInputPins {
+                data,
+                ..Default::default()
+            }
+        }
+
+        ClockDebug {
+            is_fetch_cycle: false,
+            opcode_fetched: None,
         }
     }
 
