@@ -11,6 +11,7 @@ enum Message {
     DebugCpu,
     StepInstruction,
     ToggleLog,
+    DebugOam,
 }
 
 struct App {
@@ -62,11 +63,6 @@ impl Application for App {
                         if self.log_instructions && debug_info.is_fetch_cycle {
                             println!("{:?}", self.gameboy.cpu);
                         }
-                        if let Some(0x19c9) = debug_info.opcode_fetched {
-                            self.paused = true;
-                            println!("{:?}", self.gameboy.cpu);
-                            break;
-                        }
                     }
                 }
                 iced::Command::none()
@@ -93,6 +89,22 @@ impl Application for App {
             Message::StepInstruction => {
                 self.gameboy.step_instruction();
                 println!("{:?}", self.gameboy.cpu);
+                iced::Command::none()
+            }
+            Message::DebugOam => {
+                println!(
+                    "{:?}",
+                    (0..40)
+                        .filter_map(|i| {
+                            let entry = self.gameboy.ppu.oam(i);
+                            if entry != Default::default() {
+                                Some(entry)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                );
                 iced::Command::none()
             }
 
@@ -148,6 +160,7 @@ impl Application for App {
                                 KeyCode::D => Some(Message::DebugCpu),
                                 KeyCode::N => Some(Message::StepInstruction),
                                 KeyCode::L => Some(Message::ToggleLog),
+                                KeyCode::O => Some(Message::DebugOam),
                                 _ => None,
                             })
                     }
