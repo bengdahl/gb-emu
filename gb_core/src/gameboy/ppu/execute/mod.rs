@@ -388,6 +388,32 @@ pub fn gen() -> PpuGenerator {
                     }
 
                     if let Some(bg_pixel) = bg_fifo.pop_pixel() {
+                        // Check if any sprites are about to be drawn
+                        if let Some(sprite) = sprite_buffer
+                            .iter_mut()
+                            .find(|sprite| sprite.xpos as isize <= x + 8)
+                        {
+                            // Pause and reset the BG fetcher, and load the sprite into the sprite fetcher
+                            bg_fifo.reset_fetcher();
+                            sprite_fifo.load_sprite(*sprite);
+                            // Move the sprite offscreen to prevent it from being redrawn
+                            sprite.xpos = 255;
+                            // Prevents the borrow checker from whining about borrowing over a yield
+                            // let sprite = *sprite;
+                            // Perform the sprite fetch
+                            for _ in 0..6 {
+                                sprite_fifo.clock(&mut state);
+                                ppu_yield!()
+                            }
+
+                            // If necessary, discard pixels that are off-screen to the left
+                            // let true_xpos = sprite.xpos - 8;
+                            // let discard = x - true_xpos as isize;
+                            // for _ in 0..discard {
+                            //     sprite_fifo.pop_pixel();
+                            // }
+                        }
+
                         let sprite_pixel = sprite_fifo.pop_pixel();
                         if x >= 0 {
                             state.put_pixel(bg_pixel, sprite_pixel, x as usize, scanline as usize);
@@ -406,22 +432,6 @@ pub fn gen() -> PpuGenerator {
                             inside_window = true;
                         }
                         x += 1;
-                        // Check if any sprites are about to be drawn
-                        if let Some(sprite) = sprite_buffer
-                            .iter_mut()
-                            .find(|sprite| sprite.xpos as isize <= x + 8)
-                        {
-                            // Pause and reset the BG fetcher, and load the sprite into the sprite fetcher
-                            bg_fifo.reset_fetcher();
-                            sprite_fifo.load_sprite(*sprite);
-                            // Move the sprite offscreen to prevent it from being redrawn
-                            sprite.xpos = 255;
-                            // Perform the sprite fetch
-                            for _ in 0..6 {
-                                sprite_fifo.clock(&mut state);
-                                ppu_yield!()
-                            }
-                        }
                     }
                     ppu_yield!();
                     cycles += 1;
