@@ -1,11 +1,9 @@
 [package]
-name = "gb_core"
+name = "gb_cpu"
 version = "0.1.0"
-authors = ["Ben Engdahl <bengdahl341@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bitflags = "1.2"
-gb_cpu = { path = "../gb_cpu" }
+paste = "1.0.4"

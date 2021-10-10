@@ -2,7 +2,7 @@ mod mbc1;
 mod rom;
 
 use super::Chip;
-use crate::cpu::CpuOutputPins;
+use gb_cpu::CpuOutputPins;
 use mbc1::{Mbc1, Mbc1WithBatteryRam, Mbc1WithRam};
 
 trait Mapper: Chip {}

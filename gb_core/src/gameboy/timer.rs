@@ -1,4 +1,4 @@
-use crate::cpu::CpuOutputPins;
+use gb_cpu::CpuOutputPins;
 
 use super::Chip;
 
@@ -11,12 +11,7 @@ pub struct Timer {
 }
 
 impl Chip for Timer {
-    fn clock(
-        &mut self,
-        input: crate::cpu::CpuOutputPins,
-        data: &mut u8,
-        interrupt_request: &mut u8,
-    ) {
+    fn clock(&mut self, input: gb_cpu::CpuOutputPins, data: &mut u8, interrupt_request: &mut u8) {
         let mut tima_write = false;
 
         match input {

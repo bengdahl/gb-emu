@@ -1,4 +1,4 @@
-use gb_core::cpu::{Cpu, CpuInputPins, CpuOutputPins, CpuRunner, FRegister};
+use gb_cpu::{Cpu, CpuInputPins, CpuOutputPins, CpuRunner, FRegister};
 
 pub const RESULT_ADDR: u16 = 0xAA55;
 pub const RESULT_ADDR_LO: u8 = 0x55;

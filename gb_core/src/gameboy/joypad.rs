@@ -57,20 +57,15 @@ impl Joypad {
 }
 
 impl Chip for Joypad {
-    fn clock(
-        &mut self,
-        input: crate::cpu::CpuOutputPins,
-        data: &mut u8,
-        interrupt_request: &mut u8,
-    ) {
+    fn clock(&mut self, input: gb_cpu::CpuOutputPins, data: &mut u8, interrupt_request: &mut u8) {
         match input {
-            crate::cpu::CpuOutputPins::Write {
+            gb_cpu::CpuOutputPins::Write {
                 addr: 0xFF00,
                 data: v,
             } => {
                 self.p1 = v & 0b00110000;
             }
-            crate::cpu::CpuOutputPins::Read { addr: 0xFF00 } => {
+            gb_cpu::CpuOutputPins::Read { addr: 0xFF00 } => {
                 *data = self.p1;
             }
             _ => (),

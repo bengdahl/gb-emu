@@ -5,5 +5,4 @@
 #![feature(assert_matches)]
 #![feature(array_chunks)]
 
-pub mod cpu;
 pub mod gameboy;

@@ -8,7 +8,7 @@ pub mod registers;
 use frame::Frame;
 use std::ops::{Deref, DerefMut, GeneratorState};
 
-use crate::cpu::CpuOutputPins;
+use gb_cpu::CpuOutputPins;
 
 use self::execute::PpuState;
 

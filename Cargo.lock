@@ -994,6 +994,13 @@ name = "gb_core"
 version = "0.1.0"
 dependencies = [
  "bitflags",
+ "gb_cpu",
+]
+
+[[package]]
+name = "gb_cpu"
+version = "0.1.0"
+dependencies = [
  "paste",
 ]
 

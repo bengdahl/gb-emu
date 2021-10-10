@@ -4,7 +4,7 @@ pub mod memory;
 pub mod ppu;
 pub mod timer;
 
-use crate::cpu::{CpuInputPins, CpuOutputPins, CpuRunner, CpuRunnerYield};
+use gb_cpu::{CpuInputPins, CpuOutputPins, CpuRunner, CpuRunnerYield};
 use memory::Memory;
 
 use self::{cart::Cart, ppu::Ppu};
@@ -25,7 +25,7 @@ pub struct Gameboy {
 impl Gameboy {
     pub fn new(rom: Vec<u8>) -> Result<Self, &'static str> {
         Ok(Gameboy {
-            cpu: crate::cpu::Cpu::default().runner(),
+            cpu: gb_cpu::Cpu::default().runner(),
             ppu: ppu::Ppu::new(),
             cpu_input: CpuInputPins::default(),
             memory: Memory::new(),

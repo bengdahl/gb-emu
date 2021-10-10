@@ -1,9 +1,7 @@
 mod pixel_fifo;
 
-use crate::{
-    cpu::{CpuInputPins, CpuOutputPins},
-    gameboy::ppu::color,
-};
+use crate::gameboy::ppu::color;
+use gb_cpu::{CpuInputPins, CpuOutputPins};
 
 use self::pixel_fifo::Pixel;
 

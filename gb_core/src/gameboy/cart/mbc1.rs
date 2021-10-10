@@ -1,4 +1,5 @@
-use crate::{cpu::CpuOutputPins, gameboy::Chip};
+use crate::gameboy::Chip;
+use gb_cpu::CpuOutputPins;
 
 use super::Mapper;
 

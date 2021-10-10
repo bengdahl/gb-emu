@@ -1,4 +1,4 @@
-use crate::cpu::CpuOutputPins;
+use gb_cpu::CpuOutputPins;
 
 pub struct Memory {
     work_ram_1: [u8; 0x1000],
