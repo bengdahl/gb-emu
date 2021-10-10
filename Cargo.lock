@@ -990,17 +990,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gb-wgpu"
-version = "0.1.0"
-dependencies = [
- "gb_core",
- "pixels",
- "smol",
- "wgpu",
- "winit 0.25.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "gb_core"
 version = "0.1.0"
 dependencies = [
@@ -1017,6 +1006,17 @@ dependencies = [
  "iced_futures",
  "iced_native",
  "iced_web",
+]
+
+[[package]]
+name = "gb_wgpu"
+version = "0.1.0"
+dependencies = [
+ "gb_core",
+ "pixels",
+ "smol",
+ "wgpu",
+ "winit 0.25.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
