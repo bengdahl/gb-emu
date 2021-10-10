@@ -1,4 +1,4 @@
-use crate::gameboy::ppu::registers::OamEntry;
+use super::super::registers::{OamEntry, OamEntryFlags, LCDC};
 
 use super::PpuState;
 
@@ -35,42 +35,34 @@ impl BgPixelFifo {
         match self.state {
             FifoState::FetchTile => {
                 self.state = FifoState::FetchTileDataLow {
-                    tile_no: self.tile_map_offset.get_tile_number(state),
-                }
-            }
-
-            FifoState::FetchTileDataLow { tile_no } => {
-                self.state = FifoState::FetchTileDataHigh {
-                    tile_no,
-                    tile_data_low: {
+                    tile_data_index: {
+                        let tile_no = self.tile_map_offset.get_tile_number(state);
                         let tile_addr = state.bg_tile_data_address(tile_no);
-                        let tile_data_offset = match self.tile_map_offset {
+                        let tile_line_offset = match self.tile_map_offset {
                             TileCounter::Bg { .. } => 2 * ((state.ly + state.scy) % 8) as usize,
                             TileCounter::Window { window_line, .. } => {
                                 2 * (window_line % 8) as usize
                             }
                         };
-                        state.tile_data[tile_addr + tile_data_offset]
+                        tile_addr + tile_line_offset
                     },
+                }
+            }
+
+            FifoState::FetchTileDataLow { tile_data_index } => {
+                self.state = FifoState::FetchTileDataHigh {
+                    tile_data_index,
+                    tile_data_low: state.tile_data[tile_data_index],
                 }
             }
 
             FifoState::FetchTileDataHigh {
-                tile_no,
+                tile_data_index,
                 tile_data_low,
             } => {
                 self.state = FifoState::ReadyToPush {
                     tile_data_low,
-                    tile_data_high: {
-                        let tile_addr = state.bg_tile_data_address(tile_no);
-                        let tile_data_offset = match self.tile_map_offset {
-                            TileCounter::Bg { .. } => 2 * ((state.ly + state.scy) % 8) as usize,
-                            TileCounter::Window { window_line, .. } => {
-                                2 * (window_line % 8) as usize
-                            }
-                        };
-                        state.tile_data[tile_addr + tile_data_offset + 1]
-                    },
+                    tile_data_high: state.tile_data[tile_data_index + 1],
                 }
             }
 
@@ -115,7 +107,9 @@ impl TileCounter {
     fn get_tile_number(&self, state: &PpuState) -> u8 {
         match self {
             &TileCounter::Bg { x_counter } => state.get_bg_tile_number(
-                state.ly.wrapping_add(state.scy) as u16 / 8 * 32 + state.scx as u16 / 8 + x_counter,
+                (state.ly.wrapping_add(state.scy) as u16 / 8 * 32
+                    + ((state.scx as u16 / 8 + x_counter) & 0x1F))
+                    & 0x3FF,
             ),
             &TileCounter::Window {
                 x_counter,
@@ -163,30 +157,48 @@ impl SpritePixelFifo {
                 None => (),
                 Some(sprite) => {
                     self.state = FifoState::FetchTileDataLow {
-                        tile_no: sprite.tile,
+                        tile_data_index: {
+                            let sprite_line = state.ly - self.sprite.unwrap().ypos + 16;
+                            if sprite.flags.contains(OamEntryFlags::Y_FLIP) {
+                                if state.lcdc.contains(LCDC::OBJ_SIZE) {
+                                    // For y-flipped 8x16 sprites, we want to draw the second tile's
+                                    // data first
+                                    if sprite_line < 8 {
+                                        state.sprite_tile_data_address(sprite.tile + 1)
+                                            + 2 * (7 - sprite_line) as usize
+                                    } else {
+                                        state.sprite_tile_data_address(sprite.tile)
+                                            + 2 * (7 - sprite_line + 8) as usize
+                                    }
+                                } else {
+                                    state.sprite_tile_data_address(sprite.tile)
+                                        + 2 * (7 - sprite_line) as usize
+                                }
+                            } else {
+                                // For non-y-flipped sprites, the line offset will naturally roll
+                                // over into the next tile.
+                                state.sprite_tile_data_address(sprite.tile)
+                                    + 2 * sprite_line as usize
+                            }
+                        },
                     }
                 }
             },
 
-            FifoState::FetchTileDataLow { tile_no } => {
-                let tile_index = state.sprite_tile_data_address(tile_no)
-                    + 2 * (state.ly - self.sprite.unwrap().ypos + 16) as usize;
+            FifoState::FetchTileDataLow { tile_data_index } => {
                 self.state = FifoState::FetchTileDataHigh {
-                    tile_no,
-                    tile_data_low: state.tile_data[tile_index],
+                    tile_data_index,
+                    tile_data_low: state.tile_data[tile_data_index],
                 };
             }
 
             FifoState::FetchTileDataHigh {
-                tile_no,
+                tile_data_index,
                 tile_data_low,
             } => {
-                let tile_index = state.sprite_tile_data_address(tile_no)
-                    + 2 * (state.ly - self.sprite.unwrap().ypos + 16) as usize
-                    + 1;
                 self.state = FifoState::ReadyToPush {
                     tile_data_low,
-                    tile_data_high: state.tile_data[tile_index],
+                    tile_data_high: state.tile_data[tile_data_index + 1],
                 };
             }
 
@@ -195,8 +207,16 @@ impl SpritePixelFifo {
                 tile_data_high,
             } => {
                 for i in 0..8 {
-                    let pix_low = (tile_data_low >> (7 - i)) & 1;
-                    let pix_high = (tile_data_high >> (7 - i)) & 1;
+                    let (pix_low, pix_high) =
+                        if self.sprite.unwrap().flags.contains(OamEntryFlags::X_FLIP) {
+                            let pix_low = (tile_data_low >> i) & 1;
+                            let pix_high = (tile_data_high >> i) & 1;
+                            (pix_low, pix_high)
+                        } else {
+                            let pix_low = (tile_data_low >> (7 - i)) & 1;
+                            let pix_high = (tile_data_high >> (7 - i)) & 1;
+                            (pix_low, pix_high)
+                        };
                     let prepared_pixel = Pixel {
                         color: (pix_high << 1) | pix_low,
                         palette: if self
@@ -248,10 +268,10 @@ impl SpritePixelFifo {
 enum FifoState {
     FetchTile,
     FetchTileDataLow {
-        tile_no: u8,
+        tile_data_index: usize,
     },
     FetchTileDataHigh {
-        tile_no: u8,
+        tile_data_index: usize,
         tile_data_low: u8,
     },
     ReadyToPush {
