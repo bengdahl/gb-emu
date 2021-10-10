@@ -33,7 +33,7 @@ impl Application for App {
 
         let mut app = App {
             gameboy: gb_core::gameboy::Gameboy::new(buf).unwrap(),
-            paused: true,
+            paused: false,
             log_instructions: false,
         };
         app.gameboy.reset();
