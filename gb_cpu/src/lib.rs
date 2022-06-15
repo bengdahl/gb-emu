@@ -1,4 +1,4 @@
-#![feature(generators, generator_trait, never_type, destructuring_assignment)]
+#![feature(generators, generator_trait, never_type)]
 
 pub mod assembler;
 mod decode;

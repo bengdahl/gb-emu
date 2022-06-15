@@ -155,10 +155,8 @@ impl PpuState {
     fn put_pixel(&mut self, bg_pix: Pixel, sprite_pix: Pixel, x: usize, y: usize) {
         assert!(x < 160);
         assert!(y < 144);
-        let color_id = if sprite_pix.color == 0 {
+        let color_id = if sprite_pix.color == 0 || (sprite_pix.bg_priority && bg_pix.color != 0) {
             // If the sprite pixel is transparent, draw the BG pixel
-            color::calculate_monochrome_color_id(self.bgp, bg_pix.color)
-        } else if sprite_pix.bg_priority && bg_pix.color != 0 {
             // If the sprite has BG priority and the background color is not 0, draw the BG pixel
             color::calculate_monochrome_color_id(self.bgp, bg_pix.color)
         } else {
