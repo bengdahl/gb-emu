@@ -64,7 +64,7 @@ impl Chip for Timer {
             self.tima = tima;
             if carry {
                 // Set interrupt 50h
-                *interrupt_request = *interrupt_request | 0b100;
+                *interrupt_request |= 0b100;
                 // Reset TIMA to TMA
                 self.tima = self.tma;
             }

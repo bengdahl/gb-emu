@@ -28,6 +28,12 @@ impl Ppu {
     }
 }
 
+impl Default for Ppu {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Deref for Ppu {
     type Target = PpuState;
 
@@ -65,7 +71,7 @@ impl Ppu {
 
                 let tile_id = row * ROW_LENGTH + col;
                 for offy in 0..TILE_WIDTH {
-                    let row_lo = self.tile_data[tile_id * 16 + 2 * offy + 0];
+                    let row_lo = self.tile_data[tile_id * 16 + 2 * offy];
                     let row_hi = self.tile_data[tile_id * 16 + 2 * offy + 1];
                     for ypix in 0..scale {
                         for offx in 0..TILE_WIDTH {

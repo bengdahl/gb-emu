@@ -27,6 +27,12 @@ impl Frame {
     }
 }
 
+impl Default for Frame {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn assert_coords_in_range(x: usize, y: usize) {
     assert!(y < 144, "y ({}) is out of range (<144)", y);
     assert!(x < 160, "x ({}) is out of range (<160)", x);

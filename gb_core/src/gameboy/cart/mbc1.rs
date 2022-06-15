@@ -25,8 +25,8 @@ impl<R: ram::Ram> Mbc1Generic<R> {
     pub fn new(data: Vec<u8>) -> Self {
         let mut banks = data.array_chunks::<0x4000>();
         let mut data = vec![];
-        while let Some(bank) = banks.next() {
-            data.push(bank.clone());
+        for bank in banks.by_ref() {
+            data.push(*bank);
         }
         let remainder = {
             let mut buf = [0; 0x4000];
@@ -99,7 +99,7 @@ impl<R: ram::Ram> Chip for Mbc1Generic<R> {
                     }
                     0x2000..=0x3FFF => self.rom_bank_lower = data & 0x1F,
                     0x4000..=0x5FFF => self.rom_bank_upper = data & 0x03,
-                    0x6000..=0x7FFF => self.mode_select = !(data == 0),
+                    0x6000..=0x7FFF => self.mode_select = data != 0,
                     0xA000..=0xBFFF => {
                         if self.ram_enable {
                             self.ram[addr - 0xA000] = data

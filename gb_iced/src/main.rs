@@ -44,9 +44,9 @@ impl Application for App {
 
     fn title(&self) -> String {
         if !self.paused {
-            format!("GameBoy")
+            "GameBoy".to_string()
         } else {
-            format!("GameBoy - Paused")
+            "GameBoy - Paused".to_string()
         }
     }
 
@@ -127,8 +127,8 @@ impl Application for App {
             // .push(iced::Text::new("Hello, world!"))
             .push(
                 iced::Image::new(iced::image::Handle::from_pixels(
-                    160 as u32,
-                    144 as u32,
+                    160,
+                    144,
                     u32_to_bgra(frame.iter().copied()),
                 ))
                 .width(Length::FillPortion(5))
@@ -155,7 +155,7 @@ impl Application for App {
                     iced::keyboard::Event::KeyPressed { key_code, .. } => {
                         keycode_to_button(key_code)
                             .map(Message::Pressed)
-                            .or_else(|| match key_code {
+                            .or(match key_code {
                                 KeyCode::P => Some(Message::TogglePause),
                                 KeyCode::D => Some(Message::DebugCpu),
                                 KeyCode::N => Some(Message::StepInstruction),

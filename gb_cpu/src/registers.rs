@@ -107,7 +107,7 @@ impl Registers {
     combined_registers!(hl, l, h);
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub struct FRegister(u8);
 
 impl FRegister {
@@ -126,7 +126,7 @@ impl FRegister {
     /// Equivalent to `self = self | other`
     #[inline(always)]
     pub fn set(&mut self, other: FRegister) {
-        *self = *self | other
+        *self |= other
     }
 
     /// Equivalent to `self = self & !other`
@@ -143,12 +143,6 @@ impl FRegister {
         } else {
             self.unset(flags)
         }
-    }
-}
-
-impl Default for FRegister {
-    fn default() -> Self {
-        FRegister(0)
     }
 }
 

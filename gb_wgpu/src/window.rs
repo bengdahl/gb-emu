@@ -114,7 +114,7 @@ impl ViewSetup {
                                 let [r, g, b, a] = pix.to_le_bytes();
 
                                 let fb_offset = y * fb_pitch + x * 4;
-                                framebuffer[fb_offset + 0] = r;
+                                framebuffer[fb_offset] = r;
                                 framebuffer[fb_offset + 1] = g;
                                 framebuffer[fb_offset + 2] = b;
                                 framebuffer[fb_offset + 3] = a;

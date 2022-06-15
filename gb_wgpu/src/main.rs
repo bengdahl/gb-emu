@@ -58,7 +58,7 @@ fn game_thread(
     // Gameboy runner loop
     smol::block_on(exec.run(async {
         let mut frame_timer = smol::Timer::interval(std::time::Duration::from_millis(16));
-        while let Some(_) = frame_timer.next().await {
+        while (frame_timer.next().await).is_some() {
             let mut gameboy = gameboy.lock().await;
             for _ in 0..gb_core::gameboy::ppu::consts::FRAME_T_CYCLES / 4 {
                 gameboy.clock();
@@ -66,7 +66,10 @@ fn game_thread(
 
             let frame = gameboy.get_frame();
 
-            if let Err(_) = event_loop_proxy.send_event(ViewEvent::GameboyFrame { frame }) {
+            if event_loop_proxy
+                .send_event(ViewEvent::GameboyFrame { frame })
+                .is_err()
+            {
                 break;
             }
         }

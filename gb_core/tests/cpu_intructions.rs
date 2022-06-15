@@ -51,6 +51,7 @@ impl InstructionTest {
                     return None;
                 }
 
+                #[allow(clippy::or_fun_call)]
                 loop {
                     let addr = self.last_access;
                     let data = match self.to_write {

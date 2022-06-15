@@ -99,7 +99,7 @@ impl PpuState {
     pub fn oam(&self, index: usize) -> OamEntry {
         assert!(index <= 40);
         OamEntry {
-            ypos: self.oam[index * 4 + 0],
+            ypos: self.oam[index * 4],
             xpos: self.oam[index * 4 + 1],
             tile: self.oam[index * 4 + 2],
             flags: OamEntryFlags::from_bits_truncate(self.oam[index * 4 + 3]),
@@ -173,6 +173,12 @@ impl PpuState {
 
     fn swap_frames(&mut self) {
         std::mem::swap(&mut self.back_frame, &mut self.frame);
+    }
+}
+
+impl Default for PpuState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -380,7 +386,7 @@ pub fn gen() -> PpuGenerator {
                 let mut inside_window = false;
                 while x < 160 {
                     if cycles % 2 == 0 {
-                        bg_fifo.clock(&mut state);
+                        bg_fifo.clock(&state);
                     }
 
                     if let Some(bg_pixel) = bg_fifo.pop_pixel() {

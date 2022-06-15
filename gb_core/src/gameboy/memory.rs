@@ -16,11 +16,13 @@ impl Memory {
     }
 
     fn address_is_in_range(addr: u16) -> bool {
-        match addr {
-            0xC000..=0xDFFF => true,
-            0xFF80..=0xFFFE => true,
-            _ => false,
-        }
+        matches!(addr, 0xC000..=0xDFFF | 0xFF80..=0xFFFE)
+    }
+}
+
+impl Default for Memory {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

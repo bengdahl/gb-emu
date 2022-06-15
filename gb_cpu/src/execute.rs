@@ -367,19 +367,21 @@ pub struct CpuRunnerYield {
     pub is_fetch_cycle: bool,
 }
 
+type CpuRunnerGen = std::pin::Pin<
+    Box<
+        dyn std::ops::Generator<
+                (super::Cpu, CpuInputPins),
+                Yield = (super::Cpu, CpuRunnerYield),
+                Return = !,
+            > + Send
+            + Sync,
+    >,
+>;
+
 /// Provides a wrapper to use around the generator underneath the CPU execution logic.
 pub struct CpuRunner {
     pub cpu: super::Cpu,
-    gen: std::pin::Pin<
-        Box<
-            dyn std::ops::Generator<
-                    (super::Cpu, CpuInputPins),
-                    Yield = (super::Cpu, CpuRunnerYield),
-                    Return = !,
-                > + Send
-                + Sync,
-        >,
-    >,
+    gen: CpuRunnerGen,
 }
 
 impl CpuRunner {
@@ -1264,6 +1266,7 @@ pub enum FlagCondition {
     C,
 }
 
+#[allow(clippy::upper_case_acronyms)]
 pub enum RotateShiftOperation {
     RLC,
     RRC,

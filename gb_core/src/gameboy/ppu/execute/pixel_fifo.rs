@@ -106,12 +106,12 @@ pub enum TileCounter {
 impl TileCounter {
     fn get_tile_number(&self, state: &PpuState) -> u8 {
         match self {
-            &TileCounter::Bg { x_counter } => state.get_bg_tile_number(
+            TileCounter::Bg { x_counter } => state.get_bg_tile_number(
                 (state.ly.wrapping_add(state.scy) as u16 / 8 * 32
                     + ((state.scx as u16 / 8 + x_counter) & 0x1F))
                     & 0x3FF,
             ),
-            &TileCounter::Window {
+            TileCounter::Window {
                 x_counter,
                 window_line,
             } => state.get_window_tile_number(window_line / 8 * 32 + x_counter),
@@ -337,7 +337,7 @@ impl<T: Default + Clone + Copy, const N: usize> ShiftRegister<T, N> {
             return None;
         }
 
-        let r = self.data[self.i].clone();
+        let r = self.data[self.i];
         self.i = (self.i + 1) % N;
         self.len -= 1;
         Some(r)
