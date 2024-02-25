@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 gb_core = { path = "../gb_core" }
-wgpu = "0.10.1"
-pixels = "0.6.0"
-winit = "0.25.0"
+pixels = "0.13"
+winit = { version = "0.29", features = ["rwh_05"] }
 smol = "*"

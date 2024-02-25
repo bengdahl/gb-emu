@@ -1,5 +1,5 @@
-#![feature(generators)]
-#![feature(generator_trait)]
+#![feature(coroutines)]
+#![feature(coroutine_trait)]
 #![feature(never_type)]
 #![feature(assert_matches)]
 #![feature(array_chunks)]

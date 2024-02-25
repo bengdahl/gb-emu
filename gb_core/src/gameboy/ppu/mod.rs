@@ -6,7 +6,7 @@ pub mod frame;
 pub mod registers;
 
 use frame::Frame;
-use std::ops::{Deref, DerefMut, GeneratorState};
+use std::ops::{CoroutineState, Deref, DerefMut};
 
 use gb_cpu::CpuOutputPins;
 
@@ -109,8 +109,8 @@ impl Ppu {
 impl Ppu {
     pub fn clock_t_state(&mut self) {
         match self.gen.as_mut().resume(self.state.take().unwrap()) {
-            GeneratorState::Yielded(state) => self.state = Some(state),
-            GeneratorState::Complete(_) => unreachable!(),
+            CoroutineState::Yielded(state) => self.state = Some(state),
+            CoroutineState::Complete(_) => unreachable!(),
         }
     }
 

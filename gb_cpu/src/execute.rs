@@ -369,7 +369,7 @@ pub struct CpuRunnerYield {
 
 type CpuRunnerGen = std::pin::Pin<
     Box<
-        dyn std::ops::Generator<
+        dyn std::ops::Coroutine<
                 (super::Cpu, CpuInputPins),
                 Yield = (super::Cpu, CpuRunnerYield),
                 Return = !,
@@ -387,13 +387,13 @@ pub struct CpuRunner {
 impl CpuRunner {
     /// Clock the CPU by exactly one M-cycle
     pub fn clock(&mut self, pins: CpuInputPins) -> CpuRunnerYield {
-        use std::ops::GeneratorState;
+        use std::ops::CoroutineState;
         match self.gen.as_mut().resume((self.cpu, pins)) {
-            GeneratorState::Yielded((cpu, pins_out)) => {
+            CoroutineState::Yielded((cpu, pins_out)) => {
                 self.cpu = cpu;
                 pins_out
             }
-            GeneratorState::Complete(_) => unreachable!(),
+            CoroutineState::Complete(_) => unreachable!(),
         }
     }
 }
@@ -407,7 +407,7 @@ impl std::fmt::Debug for CpuRunner {
 }
 
 /// Yields a generator containing state that will run the cpu
-fn cpu_runner_gen() -> impl std::ops::Generator<
+fn cpu_runner_gen() -> impl std::ops::Coroutine<
     (super::Cpu, CpuInputPins),
     Yield = (super::Cpu, CpuRunnerYield),
     Return = !,

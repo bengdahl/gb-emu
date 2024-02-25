@@ -20,7 +20,7 @@ impl std::fmt::Debug for OamEntry {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Default, Debug, Copy, Clone, Eq, PartialEq)]
     pub struct OamEntryFlags: u8 {
         const BG_PRIORITY = 0x80;
         const Y_FLIP = 0x40;
@@ -30,6 +30,7 @@ bitflags! {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct LCDC: u8 {
         const LCD_ENABLE = 0x80;
         const WINDOW_TILEMAP_AREA = 0x40;
@@ -50,7 +51,7 @@ impl Default for LCDC {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]
     pub struct STAT: u8 {
         const LYC_INTERRUPT_ENABLE = 0x40;
         const OAM_INTERRUPT_ENABLE = 0x20;
@@ -66,7 +67,7 @@ bitflags! {
 }
 
 impl STAT {
-    const MODE_BITMASK: STAT = STAT { bits: 0xFC };
+    const MODE_BITMASK: STAT = STAT::from_bits_truncate(0xFC);
 
     #[inline]
     pub fn set_mode(&mut self, mode: Self) {

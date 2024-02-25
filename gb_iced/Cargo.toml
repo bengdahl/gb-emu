@@ -7,14 +7,10 @@ edition = "2018"
 
 [dependencies]
 gb_core = { path = "../gb_core" }
-iced = { git = "https://github.com/hecrj/iced.git", rev = "589f68df0f647d93f2b9dd7bf29cfacb0201351c", features = [
-    "image",
-    "smol",
-] }
-iced_futures = { git = "https://github.com/hecrj/iced.git", rev = "589f68df0f647d93f2b9dd7bf29cfacb0201351c" }
+iced = { version = "0.12", features = ["image", "smol"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-iced_native = { git = "https://github.com/hecrj/iced.git", rev = "589f68df0f647d93f2b9dd7bf29cfacb0201351c" }
+iced_runtime = "0.12"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-iced_web = { git = "https://github.com/hecrj/iced.git", rev = "589f68df0f647d93f2b9dd7bf29cfacb0201351c" }
+iced_web = "0.4"

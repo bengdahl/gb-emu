@@ -91,11 +91,7 @@ impl<R: ram::Ram> Chip for Mbc1Generic<R> {
             CpuOutputPins::Write { addr, data } => {
                 match addr {
                     0x0000..=0x1FFF => {
-                        if data & 0x0F == 0xA {
-                            self.ram_enable = true
-                        } else {
-                            self.ram_enable = false
-                        }
+                        self.ram_enable = data & 0x0F == 0xA;
                     }
                     0x2000..=0x3FFF => self.rom_bank_lower = data & 0x1F,
                     0x4000..=0x5FFF => self.rom_bank_upper = data & 0x03,

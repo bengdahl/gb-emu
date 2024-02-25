@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 
-use iced::{keyboard::KeyCode, window, Application, Color, Element, Length, Settings};
+use iced::{
+    keyboard::{key::Named, Key},
+    window, Application, Element, Length, Settings,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Message {
@@ -24,6 +27,7 @@ impl Application for App {
     type Executor = iced::executor::Default;
     type Flags = PathBuf;
     type Message = Message;
+    type Theme = iced::theme::Theme;
 
     fn new(rom_path: PathBuf) -> (Self, iced::Command<Message>) {
         use std::io::Read;
@@ -50,11 +54,7 @@ impl Application for App {
         }
     }
 
-    fn update(
-        &mut self,
-        message: Self::Message,
-        _clip: &mut iced::Clipboard,
-    ) -> iced::Command<Message> {
+    fn update(&mut self, message: Self::Message) -> iced::Command<Message> {
         match message {
             Message::TickFrame => {
                 if !self.paused {
@@ -120,13 +120,13 @@ impl Application for App {
         }
     }
 
-    fn view(&mut self) -> Element<'_, Self::Message> {
+    fn view(&self) -> Element<'_, Self::Message> {
         let frame = self.gameboy.get_frame();
         let (tile_data, tilew, tileh) = self.gameboy.ppu.display_tile_data(2);
-        iced::Row::new()
+        iced::widget::Row::new()
             // .push(iced::Text::new("Hello, world!"))
             .push(
-                iced::Image::new(iced::image::Handle::from_pixels(
+                iced::widget::Image::new(iced::widget::image::Handle::from_pixels(
                     160,
                     144,
                     u32_to_bgra(frame.iter().copied()),
@@ -135,7 +135,7 @@ impl Application for App {
                 .height(Length::FillPortion(3)),
             )
             .push(
-                iced::Image::new(iced::image::Handle::from_pixels(
+                iced::widget::Image::new(iced::widget::image::Handle::from_pixels(
                     tilew as u32,
                     tileh as u32,
                     u32_to_bgra(tile_data.iter().copied()),
@@ -147,35 +147,31 @@ impl Application for App {
     }
 
     fn subscription(&self) -> iced::Subscription<Self::Message> {
-        iced_futures::subscription::Subscription::batch([
-            iced_futures::time::every(std::time::Duration::from_millis(16))
-                .map(|_| Message::TickFrame),
-            iced_native::subscription::events_with(|event, _status| match event {
-                iced_native::Event::Keyboard(e) => match e {
-                    iced::keyboard::Event::KeyPressed { key_code, .. } => {
-                        keycode_to_button(key_code)
-                            .map(Message::Pressed)
-                            .or(match key_code {
-                                KeyCode::P => Some(Message::TogglePause),
-                                KeyCode::D => Some(Message::DebugCpu),
-                                KeyCode::N => Some(Message::StepInstruction),
-                                KeyCode::L => Some(Message::ToggleLog),
-                                KeyCode::O => Some(Message::DebugOam),
-                                _ => None,
-                            })
-                    }
-                    iced::keyboard::Event::KeyReleased { key_code, .. } => {
-                        keycode_to_button(key_code).map(Message::Released)
-                    }
+        let key_press = iced::keyboard::on_key_press(|key, _| {
+            if let Some(button) = keycode_to_button(&key) {
+                Some(Message::Pressed(button))
+            } else {
+                match key {
+                    Key::Character(c) if c == "p" => Some(Message::TogglePause),
+                    Key::Character(c) if c == "d" => Some(Message::DebugCpu),
+                    Key::Character(c) if c == "n" => Some(Message::StepInstruction),
+                    Key::Character(c) if c == "l" => Some(Message::ToggleLog),
+                    Key::Character(c) if c == "o" => Some(Message::DebugOam),
                     _ => None,
-                },
-                _ => None,
-            }),
-        ])
-    }
+                }
+            }
+        });
 
-    fn background_color(&self) -> Color {
-        Color::BLACK
+        let key_release = iced::keyboard::on_key_release(|key, _| {
+            let button = keycode_to_button(&key)?;
+            Some(Message::Released(button))
+        });
+
+        iced::subscription::Subscription::batch([
+            iced::time::every(std::time::Duration::from_millis(16)).map(|_| Message::TickFrame),
+            key_press,
+            key_release,
+        ])
     }
 }
 
@@ -183,12 +179,18 @@ fn main() {
     let mut settings = Settings {
         flags: std::env::args().nth(1).expect("Expected 1 argument").into(),
         window: window::Settings {
-            size: (160 * 2, 144 * 2),
+            size: iced::Size {
+                width: 160.0 * 2.0,
+                height: 144.0 * 2.0,
+            },
             ..Default::default()
         },
         ..Default::default()
     };
-    settings.window.min_size = Some((160, 144));
+    settings.window.min_size = Some(iced::Size {
+        width: 160.0,
+        height: 144.0,
+    });
     App::run(settings).unwrap();
 }
 
@@ -196,16 +198,16 @@ fn u32_to_bgra(x: impl Iterator<Item = u32>) -> Vec<u8> {
     x.flat_map(|p| p.to_le_bytes()).collect()
 }
 
-fn keycode_to_button(key_code: KeyCode) -> Option<gb_core::gameboy::joypad::Button> {
-    match key_code {
-        iced::keyboard::KeyCode::Up => Some(gb_core::gameboy::joypad::Button::Up),
-        iced::keyboard::KeyCode::Left => Some(gb_core::gameboy::joypad::Button::Left),
-        iced::keyboard::KeyCode::Right => Some(gb_core::gameboy::joypad::Button::Right),
-        iced::keyboard::KeyCode::Down => Some(gb_core::gameboy::joypad::Button::Down),
-        iced::keyboard::KeyCode::Z => Some(gb_core::gameboy::joypad::Button::B),
-        iced::keyboard::KeyCode::X => Some(gb_core::gameboy::joypad::Button::A),
-        iced::keyboard::KeyCode::G => Some(gb_core::gameboy::joypad::Button::Select),
-        iced::keyboard::KeyCode::H => Some(gb_core::gameboy::joypad::Button::Start),
+fn keycode_to_button(key: &Key) -> Option<gb_core::gameboy::joypad::Button> {
+    match key {
+        Key::Named(Named::ArrowUp) => Some(gb_core::gameboy::joypad::Button::Up),
+        Key::Named(Named::ArrowLeft) => Some(gb_core::gameboy::joypad::Button::Left),
+        Key::Named(Named::ArrowRight) => Some(gb_core::gameboy::joypad::Button::Right),
+        Key::Named(Named::ArrowDown) => Some(gb_core::gameboy::joypad::Button::Down),
+        Key::Character(c) if c == "z" => Some(gb_core::gameboy::joypad::Button::B),
+        Key::Character(c) if c == "x" => Some(gb_core::gameboy::joypad::Button::A),
+        Key::Character(c) if c == "g" => Some(gb_core::gameboy::joypad::Button::Select),
+        Key::Character(c) if c == "h" => Some(gb_core::gameboy::joypad::Button::Start),
         _ => None,
     }
 }

@@ -37,7 +37,7 @@ fn ppu_singlecolor() {
         frame.iter().for_each(|&pix| {
             assert_eq!(
                 pix,
-                color::COLORS[color::calculate_monochrome_color_id(ppu.bgp, color) as usize]
+                color::COLORS[color::calculate_monochrome_color_id(ppu.bgp, color)]
             )
         });
     }

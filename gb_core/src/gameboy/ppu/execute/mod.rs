@@ -9,7 +9,7 @@ use super::{
     frame::Frame,
     registers::{OamEntry, OamEntryFlags, LCDC, STAT},
 };
-use std::{ops::Generator, pin::Pin};
+use std::{ops::Coroutine, pin::Pin};
 
 pub struct PpuState {
     pub tile_data: [u8; 0x9800 - 0x8000],
@@ -331,7 +331,7 @@ pub enum DmaState {
 }
 
 pub type PpuGenerator =
-    Pin<Box<dyn Generator<Box<PpuState>, Yield = Box<PpuState>, Return = !> + Send + Sync>>;
+    Pin<Box<dyn Coroutine<Box<PpuState>, Yield = Box<PpuState>, Return = !> + Send + Sync>>;
 
 pub fn gen() -> PpuGenerator {
     Box::pin(|mut state: Box<PpuState>| {
