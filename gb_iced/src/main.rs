@@ -167,11 +167,13 @@ impl Application for App {
             Some(Message::Released(button))
         });
 
-        iced::subscription::Subscription::batch([
-            iced::time::every(std::time::Duration::from_millis(16)).map(|_| Message::TickFrame),
-            key_press,
-            key_release,
-        ])
+        let frame_timer = if self.paused {
+            iced::subscription::Subscription::none()
+        } else {
+            iced::time::every(std::time::Duration::from_millis(16)).map(|_| Message::TickFrame)
+        };
+
+        iced::subscription::Subscription::batch([frame_timer, key_press, key_release])
     }
 }
 
