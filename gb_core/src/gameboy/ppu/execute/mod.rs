@@ -398,22 +398,19 @@ pub fn gen() -> PpuGenerator {
                             // Pause and reset the BG fetcher, and load the sprite into the sprite fetcher
                             bg_fifo.reset_fetcher();
                             sprite_fifo.load_sprite(*sprite);
+                            let xpos = sprite.xpos;
                             // Move the sprite offscreen to prevent it from being redrawn
                             sprite.xpos = 255;
-                            // Prevents the borrow checker from whining about borrowing over a yield
-                            // let sprite = *sprite;
-                            // Perform the sprite fetch
                             for _ in 0..6 {
                                 sprite_fifo.clock(&mut state);
                                 ppu_yield!()
                             }
 
                             // If necessary, discard pixels that are off-screen to the left
-                            // let true_xpos = sprite.xpos - 8;
-                            // let discard = x - true_xpos as isize;
-                            // for _ in 0..discard {
-                            //     sprite_fifo.pop_pixel();
-                            // }
+                            let discard = 8 - xpos as isize;
+                            for _ in 0..discard {
+                                sprite_fifo.pop_pixel();
+                            }
                         }
 
                         let sprite_pixel = sprite_fifo.pop_pixel();
